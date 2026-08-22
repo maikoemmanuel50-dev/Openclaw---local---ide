@@ -1747,6 +1747,11 @@ def _creative_prompt(prompt):
         "start ", "stop ", "run ", "execute", "launch",
         "save ", "export ", "import ", "copy ", "move ", "rename ",
         "do not", "don't", "ensure", "make sure",
+        # Production action words — these imply user wants execution
+        "generate", "develop", "produce", "animate", "film", "video",
+        "create", "build", "design", "make", "implement",
+        "construct", "fabricate", "compose", "draft", "author",
+        "prepare", "arrange", "organize", "establish",
     )
     if any(m in low for m in ACTION_MARKERS):
         return False
@@ -1758,6 +1763,37 @@ def _creative_prompt(prompt):
         return False
     hits = sum(1 for w in _CREATIVE_WORDS if w in low)
     return hits >= 1
+
+
+def _production_task(prompt):
+    """Return True when the user wants execution, not just discussion.
+    Production tasks should go through the agent loop with tools."""
+    low = " ".join(prompt.lower().split())
+    if not low:
+        return False
+    
+    # Strong production signals — these always mean execution
+    PRODUCTION_SIGNALS = (
+        "generate", "develop", "produce", "animate", "film", "video",
+        "create a", "build a", "design a", "make a",
+        "implement", "construct", "fabricate", "compose",
+        "render", "export", "deploy", "publish",
+        "assemble", "compile", "package", "bundle",
+    )
+    
+    # Check for production signals
+    if any(s in low for s in PRODUCTION_SIGNALS):
+        return True
+    
+    # Check for file/output references — implies user wants output
+    OUTPUT_SIGNALS = (
+        ".mp4", ".png", ".jpg", ".blend", ".py", ".js", ".html",
+        "output", "result", "deliverable", "file", "render",
+    )
+    if any(s in low for s in OUTPUT_SIGNALS):
+        return True
+    
+    return False
 
 
 def creative_fast_path_reply(prompt):
@@ -2563,9 +2599,15 @@ class IDEHandler(SimpleHTTPRequestHandler):
                                  "fastpath": True})
                 return
 
-        # Creative fast-path: planning/brainstorming questions answered
-        # directly via Ollama — bypasses the agent loop entirely.
-        if _creative_prompt(prompt):
+        # Production task detection: if the user wants execution (generate,
+        # create, build, etc.), route through the agent loop with tools —
+        # NOT the creative fast-path. This prevents chatbot-like behavior.
+        if _production_task(prompt):
+            print(f"[chat] production task detected: {prompt[:80]}", flush=True)
+            # Fall through to agent loop below — do NOT return here
+        elif _creative_prompt(prompt):
+            # Creative fast-path: planning/brainstorming questions answered
+            # directly via Ollama — bypasses the agent loop entirely.
             print(f"[chat] creative fast-path matched: {prompt[:80]}", flush=True)
             creative_reply = creative_fast_path_reply(prompt)
             if creative_reply:
@@ -2727,8 +2769,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
         JSON inside `content` (e.g. qwen2.5-coder): <TOOLJSON>...</TOOLJSON>."""
         import re
         import time
-        max_rounds = 12
-        wall_clock_limit = 400  # stay under the frontend's 600s watchdog
+        max_rounds = 15  # increased from 12 for complex tasks
+        wall_clock_limit = 500  # increased from 400; stays under frontend's 660s watchdog
         loop_start = time.time()
         all_tools_called = set()
         all_round_results = []
@@ -2760,7 +2802,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 "model": model,
                 "stream": False,
                 "keep_alive": -1,
-                "options": {"temperature": 0.2, "num_ctx": 16384, "num_predict": 1024, "top_p": 0.9},
+                "options": {"temperature": 0.2, "num_ctx": 16384, "num_predict": 1536, "top_p": 0.9},
                 "messages": messages,
                 "tools": filtered_tools or AGENT_TOOLS,
             }
@@ -2917,26 +2959,44 @@ class IDEHandler(SimpleHTTPRequestHandler):
 
             # Stuck-loop: the most recent call repeats the previous call exactly.
             # Persistent tool_history catches repeats across rounds too.
-            if len(tool_history) >= 2:
-                prev_name, prev_hash = tool_history[-2]
-                cur_name, cur_hash = tool_history[-1]
-                if cur_name == prev_name and cur_hash == prev_hash:
-                    print(f"[agent-loop] stuck loop: {cur_name} repeated with identical args", flush=True)
+            # Trigger after 3 identical calls (was 2) to allow for retry patterns.
+            if len(tool_history) >= 3:
+                # Check last 3 calls for identical pattern
+                last_three = tool_history[-3:]
+                if all(n == last_three[0][0] and h == last_three[0][1] for n, h in last_three):
+                    cur_name, cur_hash = tool_history[-1]
+                    print(f"[agent-loop] stuck loop: {cur_name} repeated 3x with identical args", flush=True)
                     trace_agent({"event": "loop.stuck", "round": round_i, "tool": cur_name,
                                  "session": session, "elapsed_s": round(time.time() - loop_start, 1)})
-                    # Build a helpful fallback from what we know.
+                    # Build a helpful fallback with recommendations
                     prompt_hint = ""
                     if len(messages) > 1:
                         prompt_hint = str(messages[1].get("content", ""))[:200]
                     tools_used = sorted(all_tools_called)
+                    
+                    # Generate recommendations based on what was tried
+                    recommendations = []
+                    if "production_status" in all_tools_called:
+                        recommendations.append("Check render progress with `production_status`")
+                    if "read_log" in all_tools_called:
+                        recommendations.append("Review logs with `read_log`")
+                    if "run_action" not in all_tools_called:
+                        recommendations.append("Execute a production action with `run_action`")
+                    if "escalate_openclaw" not in all_tools_called:
+                        recommendations.append("Escalate to OpenClaw for multi-step work")
+                    if not recommendations:
+                        recommendations.append("Try a more specific prompt with clear deliverables")
+                    
                     stuck_msg = (
                         f"**Agent loop converged after {round_i + 1} rounds** "
-                        f"(stuck on `{cur_name}` — identical call repeated).\n\n"
+                        f"(stuck on `{cur_name}` — identical call repeated 3x).\n\n"
                     )
                     if prompt_hint:
                         stuck_msg += f"**Your request:** {prompt_hint}\n\n"
                     stuck_msg += (
                         f"**Tools used:** {', '.join(tools_used) if tools_used else 'none'}\n\n"
+                        f"**Recommended next steps:**\n"
+                        + "\n".join(f"- {r}" for r in recommendations) + "\n\n"
                         f"The local model exhausted its tool options for this task. "
                         f"Try a more specific prompt, or ask me to **escalate to OpenClaw** "
                         f"for multi-step execution."
@@ -2961,7 +3021,27 @@ class IDEHandler(SimpleHTTPRequestHandler):
             return best_text.strip()
         if all_round_results:
             return _format_tool_summary(all_round_results)
-        return "Completed agent execution rounds."
+        
+        # Fallback with recommendations
+        tools_used = sorted(all_tools_called)
+        recommendations = []
+        if "production_status" in all_tools_called:
+            recommendations.append("Check render progress with `production_status`")
+        if "run_action" not in all_tools_called:
+            recommendations.append("Execute a production action with `run_action`")
+        if "escalate_openclaw" not in all_tools_called:
+            recommendations.append("Escalate to OpenClaw for multi-step work")
+        if not recommendations:
+            recommendations.append("Try a more specific prompt with clear deliverables")
+        
+        return (
+            f"**Agent loop completed after {max_rounds} rounds**\n\n"
+            f"**Tools used:** {', '.join(tools_used) if tools_used else 'none'}\n\n"
+            f"**Recommended next steps:**\n"
+            + "\n".join(f"- {r}" for r in recommendations) + "\n\n"
+            f"For complex tasks, try **Mission mode** (server-side sequential execution) "
+            f"or **escalate to OpenClaw** for multi-step cross-app work."
+        )
 
     def handle_vision(self, payload):
         """POST /api/vision — visual-property task, routed to the VL specialist.

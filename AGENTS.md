@@ -78,10 +78,10 @@ Agent loop observations:
   JSON tool blocks in content. The content parser is the primary path.
 - First escalation round takes ~45s (gateway warm) + model think time; a
   full escalate-through-agent chat is ~2-3 min. Frontend watchdog is 660s
-  (`app.js`); the loop has a 400s wall-clock hard cap so it never outlives
+  (`app.js`); the loop has a 500s wall-clock hard cap so it never outlives
   the frontend.
-- The agent loop (`_run_agent_loop`) converges via heuristics: max 12 rounds,
-  stuck-loop detection (identical tool+args repeated), a BLOCKED_BY_GATE
+- The agent loop (`_run_agent_loop`) converges via heuristics: max 15 rounds,
+  stuck-loop detection (identical tool+args repeated 3x), a BLOCKED_BY_GATE
   streak stops the loop (never starts a 2nd GPU job), and it stops once ALL
   tools have been called AND the model produced prose. Rounds that resolve
   (`escalate_openclaw` / terminal actions) short-circuit immediately.
@@ -90,6 +90,35 @@ Agent loop observations:
   render completes.
 - The OpenClaw agent's own reply style may be `update_goal`-style JSON — it
   is still the gateway's answer, returned verbatim.
+- Production task detection: prompts containing words like "generate", "create",
+  "build", "develop", "produce", "animate" are routed through the agent loop
+  with tools, NOT the creative fast-path. This prevents chatbot-like behavior.
+
+## Complex Task Execution
+
+### Agent Loop (Build Mode)
+- Max 15 rounds, 500s wall-clock limit
+- Best for: single-step tasks, status queries, simple tool calls
+- Uses progress detection and provides recommendations when stuck
+
+### /api/mission Endpoint
+- Server-side sequential execution (no frontend timeout)
+- Max 10 steps, each step uses one tool
+- Best for: multi-step production tasks, ordered execution
+- Halts on BLOCKED_BY_GATE or failed step
+
+### Escalation to OpenClaw
+- Delegates to gateway agent (port 18789)
+- Best for: cross-app work, Blender MCP, DaVinci Resolve, Canva
+- Terminal: result is the final answer
+
+### Tips for Complex Tasks
+1. Break large tasks into smaller prompts with clear deliverables
+2. Use Build mode for agentic execution (tools + action)
+3. Use Plan mode for brainstorming and planning (fast text)
+4. Use Mission mode for sequential multi-step tasks (no timeout)
+5. Escalate for cross-app or MCP work
+6. Monitor progress via Agent Execution Trace panel
 
 ## Live production facts (as of this handoff)
 

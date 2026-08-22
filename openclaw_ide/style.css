@@ -1022,6 +1022,33 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.task-guidance {
+  background: var(--green-900);
+  padding: 8px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.guidance-text {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+  margin: 0;
+}
+.guidance-text code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.mission-chip {
+  border: 1px solid var(--accent) !important;
+  color: var(--accent-dark) !important;
+}
+.escalate-chip {
+  border: 1px solid var(--green-400) !important;
+  color: var(--green-700) !important;
+}
+
 .chip {
   background: transparent;
   border: none;

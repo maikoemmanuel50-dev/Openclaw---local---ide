@@ -851,6 +851,60 @@ function sendChipPrompt(promptText) {
   sendChat();
 }
 
+function sendMissionPrompt() {
+  const prompt = elChatInput.value.trim();
+  if (!prompt) {
+    showToast("Enter a task description for Mission mode (server-side sequential execution)");
+    return;
+  }
+  // Use the mission endpoint directly
+  fetch("/api/mission", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mission: prompt })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      showToast("Mission error: " + data.error);
+    } else {
+      // Format and display the mission result
+      let result = `**Mission completed** (${data.planCount} steps)\n\n`;
+      if (data.stopped) result += "**Stopped early** due to gate or failure\n\n";
+      (data.report || []).forEach((step, i) => {
+        result += `**Step ${i + 1}:** ${step.tool || 'unknown'} — ${step.status || 'completed'}\n`;
+        if (step.result_summary) result += `  ${step.result_summary}\n`;
+      });
+      // Display in chat
+      appendMessage("assistant", result);
+    }
+  })
+  .catch(e => showToast("Mission failed: " + e.message));
+}
+
+function sendEscalatePrompt() {
+  const prompt = elChatInput.value.trim();
+  if (!prompt) {
+    showToast("Enter a task description to escalate to OpenClaw");
+    return;
+  }
+  // Use the escalate endpoint
+  fetch("/api/escalate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: prompt })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      showToast("Escalation error: " + data.error);
+    } else {
+      appendMessage("assistant", data.output || "OpenClaw escalation completed.");
+    }
+  })
+  .catch(e => showToast("Escalation failed: " + e.message));
+}
+
 // Prompt history: prompts are persisted server-side (.prompt_log.jsonl) so
 // they survive page refreshes. Renders a compact picker in the chat area.
 let historyPanelVisible = false;

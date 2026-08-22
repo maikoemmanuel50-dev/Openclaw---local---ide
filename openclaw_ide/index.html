@@ -443,9 +443,27 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
           Canva Guide
         </button>
+        <button class="chip mission-chip" onclick="sendMissionPrompt()" title="Server-side sequential execution (no timeout)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          Mission
+        </button>
+        <button class="chip escalate-chip" onclick="sendEscalatePrompt()" title="Delegate to OpenClaw gateway for multi-step cross-app work">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Escalate
+        </button>
       </div>
 
       <div class="green-divider"></div>
+
+      <!-- Task Guidance -->
+      <div class="task-guidance">
+        <p class="guidance-text">
+          <strong>Build mode:</strong> Agentic execution with tools (15 rounds, ~8 min). 
+          <strong>Plan mode:</strong> Fast brainstorming and planning.
+          <strong>Mission:</strong> Server-side sequential execution (no timeout). 
+          <strong>Escalate:</strong> Delegate to OpenClaw for multi-step cross-app work.
+        </p>
+      </div>
 
       <!-- Chat Stream -->
       <div class="chat-messages" id="chatMessages">
@@ -462,7 +480,7 @@
       <!-- Chat Input Box -->
       <div class="chat-input-box">
         <div id="imagePreviews" class="image-previews" style="display:none;"></div>
-        <textarea id="chatInput" placeholder="Ask OpenClaw or prompt Qwen 2.5... (paste / drop an image here to analyze it with the qwen2.5vl 7B vision model)" rows="9"></textarea>
+        <textarea id="chatInput" placeholder="Build mode: agentic execution with tools • Plan mode: brainstorming • Mission: server-side sequential • Escalate: multi-step cross-app work" rows="9"></textarea>
         <div class="chat-input-controls">
           <button class="btn-history" id="btnChatHistory" title="View recent prompts" onclick="togglePromptHistory()">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
