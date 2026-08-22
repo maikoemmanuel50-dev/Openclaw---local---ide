@@ -144,8 +144,8 @@ body {
 /* Header — teal with white text */
 .app-header {
   height: var(--header-height);
-  background: var(--green-500);
-  border-bottom: 1px solid var(--green-600);
+  background: var(--green-950);
+  border-bottom: 1px solid var(--green-800);
   display: flex;
   align-items: center;
   justify-content: space-between;
