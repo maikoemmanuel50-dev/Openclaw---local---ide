@@ -1009,7 +1009,7 @@ body {
   padding: 10px 14px;
   overflow-x: auto;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--green-500);
+  background: var(--bg-card);
 }
 .chip {
   background: transparent;
