@@ -1,9 +1,9 @@
 /* OpenClaw Local IDE — Dark Forest Green + White + Gold */
 :root {
-  /* ── 60% BASE: White editor surface ── */
-  --bg-main: #ffffff;
-  --bg-editor: #ffffff;
-  --bg-dropdown: #ffffff;
+  /* ── 60% BASE: Gold 100 Cream editor surface ── */
+  --bg-main: #fef3c7;
+  --bg-editor: #fef3c7;
+  --bg-dropdown: #fef3c7;
 
   /* ── 30% SECONDARY: Dark Forest Green ── */
   --green-50: #f0f7f4;
@@ -818,8 +818,8 @@ body {
   border-radius: 3px;
 }
 .panel-tab.active {
-  background: var(--accent);
-  color: var(--text-on-gold);
+  background: var(--green-600);
+  color: #ffffff;
   font-weight: 600;
 }
 .panel-body {
