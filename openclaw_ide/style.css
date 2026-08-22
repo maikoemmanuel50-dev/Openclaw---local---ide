@@ -145,7 +145,7 @@ body {
 .app-header {
   height: var(--header-height);
   background: var(--green-950);
-  border-bottom: 1px solid var(--green-800);
+  border-bottom: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -293,7 +293,7 @@ body {
 .activity-bar {
   width: var(--activity-width);
   background-color: var(--green-950);
-  border-right: 1px solid var(--green-800);
+  border-right: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -377,8 +377,8 @@ body {
 /* Sidebar Drawer */
 .sidebar-drawer {
   width: var(--sidebar-width);
-  background-color: var(--green-500);
-  border-right: 1px solid var(--green-600);
+  background-color: var(--green-950);
+  border-right: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -790,15 +790,15 @@ body {
 /* Bottom Panel */
 .bottom-panel {
   height: 180px;
-  background: var(--green-900);
-  border-top: 1px solid var(--green-800);
+  background: var(--green-950);
+  border-top: none;
   display: flex;
   flex-direction: column;
 }
 .panel-header {
   height: 30px;
-  background: var(--green-800);
-  border-bottom: 1px solid var(--green-700);
+  background: var(--green-900);
+  border-bottom: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -889,18 +889,18 @@ body {
 /* Agent Panel */
 .agent-panel {
   width: var(--agent-width);
-  background: var(--green-500);
-  border-left: 1px solid var(--green-600);
+  background: var(--green-950);
+  border-left: none;
   display: flex;
   flex-direction: column;
 }
 .agent-header {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--green-600);
+  border-bottom: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--green-500);
+  background: var(--green-950);
 }
 .agent-title-box {
   display: flex;
@@ -1008,7 +1008,7 @@ body {
   gap: 8px;
   padding: 10px 14px;
   overflow-x: auto;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
   background: var(--bg-card);
 }
 .chip {
@@ -1076,8 +1076,8 @@ body {
 
 .chat-input-box {
   padding: 12px;
-  border-top: 1px solid var(--green-600);
-  background: var(--green-500);
+  border-top: none;
+  background: var(--green-950);
 }
 .image-previews {
   display: flex;
@@ -1179,8 +1179,8 @@ body {
 /* Status Bar */
 .status-bar {
   height: var(--footer-height);
-  background: var(--green-900);
-  border-top: 1px solid var(--green-800);
+  background: var(--green-950);
+  border-top: none;
   display: flex;
   justify-content: space-between;
   align-items: center;
