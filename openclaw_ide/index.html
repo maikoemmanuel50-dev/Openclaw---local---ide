@@ -41,12 +41,27 @@
 
     <div class="header-right">
       <div class="mcp-badges">
-        <span class="mcp-badge active" id="crestodianBadge" title="Crestodian Security & Attestations">🛡️ Crestodian</span>
-        <span class="mcp-badge active" title="Composio Canva Authenticated">🎨 Canva MCP</span>
-        <span class="mcp-badge active" title="Blender 5.1.2 Integration">🧊 Blender 5.1</span>
-        <span class="mcp-badge" title="DaVinci Resolve Bridge">🎬 Resolve</span>
+        <span class="mcp-badge active" id="crestodianBadge" title="Crestodian Security">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Crestodian
+        </span>
+        <span class="mcp-badge active" title="Composio Canva">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+          Canva
+        </span>
+        <span class="mcp-badge active" title="Blender 5.1">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l4-4 4 4M12 16V8"/></svg>
+          Blender
+        </span>
+        <span class="mcp-badge" title="DaVinci Resolve">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2.18"/><path d="M7 2v20M17 2v20M2 12h20"/></svg>
+          Resolve
+        </span>
       </div>
-      <button class="btn-quick" id="btnRefreshAll" title="Refresh Live Data">🔄 Refresh</button>
+      <button class="btn-quick" id="btnRefreshAll" title="Refresh Live Data">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Refresh
+      </button>
     </div>
   </header>
 
@@ -54,19 +69,43 @@
   <div class="ide-container">
     <!-- Left Activity Bar -->
     <nav class="activity-bar">
-      <button class="act-btn active" data-view="files" title="Explorer (Files & Scripts)">📁</button>
-      <button class="act-btn" data-view="render" title="Render Pipeline Dashboard">🎬</button>
-      <button class="act-btn" data-view="crestodian" title="Crestodian Workspace Guard & Attestations">🛡️</button>
-      <button class="act-btn" data-view="copyright" title="Copyright Guardrail Protocol & Clearance">©</button>
-      <button class="act-btn" data-view="trace" title="Agent Execution Trace & Feedback Loop">🧭</button>
-      <button class="act-btn" data-view="trajectory" title="Model Activity & Trajectory">📊</button>
-      <button class="act-btn" data-view="tools" title="MCP & Connected Tools (Canva/Blender)">🛠️</button>
-      <button class="act-btn" data-view="guides" title="Knowledge Base & Guides">📚</button>
-      <button class="act-btn" data-view="hourly" title="Hourly Production Report">⏰</button>
-      <button class="act-btn" data-view="audio" title="Audio Assets (TTS / Sound Library)">🎵</button>
+      <button class="act-btn active" data-view="files" title="Explorer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+      </button>
+      <button class="act-btn" data-view="render" title="Render Pipeline">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 7h5M17 17h5"/></svg>
+      </button>
+      <button class="act-btn" data-view="crestodian" title="Security & Attestations">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </button>
+      <button class="act-btn" data-view="copyright" title="Copyright Guardrail">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9.354a4 4 0 100 5.292"/></svg>
+      </button>
+      <button class="act-btn" data-view="trace" title="Agent Execution Trace">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      </button>
+      <button class="act-btn" data-view="trajectory" title="Model Activity">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+      </button>
+      <button class="act-btn" data-view="tools" title="Connected Tools">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+      </button>
+      <button class="act-btn" data-view="guides" title="Knowledge Base">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+      </button>
+      <button class="act-btn" data-view="hourly" title="Hourly Report">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button class="act-btn" data-view="audio" title="Audio Assets">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+      </button>
       <div class="act-spacer"></div>
-      <button class="act-btn" data-view="power" title="Power & Full-Throttle Strategy">⚡</button>
-      <button class="act-btn" data-view="settings" title="Agent Settings & Rules">⚙️</button>
+      <button class="act-btn" data-view="power" title="Power Management">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      </button>
+      <button class="act-btn" data-view="settings" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
     </nav>
 
     <!-- Sidebar Drawer -->
@@ -348,7 +387,9 @@
     <aside class="agent-panel" id="agentPanel">
       <div class="agent-header">
         <div class="agent-title-box">
-          <span class="agent-avatar" id="agentAvatar">🦅</span>
+          <span class="agent-avatar" id="agentAvatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </span>
           <div>
             <div class="agent-name" id="agentTitle">OpenClaw Gateway</div>
             <div class="agent-sub" id="agentSubtitle">Direct Native Execution • Port 18789</div>
@@ -356,22 +397,52 @@
         </div>
         <div class="agent-header-controls">
           <div class="mode-toggle-group">
-            <button class="mode-btn active" id="modePlan" onclick="setAgentEngineMode('plan')" title="Plan Mode — Fast brainstorming, planning, explaining (VL 7B model)">📝 Plan</button>
-            <button class="mode-btn" id="modeBuild" onclick="setAgentEngineMode('build')" title="Build Mode — Agentic execution, tool-calling, production tasks (14B coder)">🔧 Build</button>
-            <button class="mode-btn" id="modeVision" onclick="setAgentEngineMode('vision')" title="Vision Mode — Visual QC of render frames (VL 7B)">👁️ Vision</button>
+            <button class="mode-btn active" id="modePlan" onclick="setAgentEngineMode('plan')" title="Plan Mode">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              Plan
+            </button>
+            <button class="mode-btn" id="modeBuild" onclick="setAgentEngineMode('build')" title="Build Mode">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+              Build
+            </button>
+            <button class="mode-btn" id="modeVision" onclick="setAgentEngineMode('vision')" title="Vision Mode">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              Vision
+            </button>
           </div>
-          <span class="badge-status-online" id="netStatusBadge" title="OpenClaw Gateway active on port 18789">● Direct Live</span>
+          <span class="badge-status-online" id="netStatusBadge" title="OpenClaw Gateway active on port 18789">
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+            Direct Live
+          </span>
         </div>
       </div>
 
       <!-- Prompt Chips -->
       <div class="prompt-chips">
-        <button class="chip" onclick="sendChipPrompt('What is the current project status and render progress?')">Project Status</button>
-        <button class="chip" onclick="sendChipPrompt('What tools and integrations are available?')">Available Tools</button>
-        <button class="chip" onclick="sendChipPrompt('Help me brainstorm ideas for a new video series')">Brainstorm Ideas</button>
-        <button class="chip" onclick="sendChipPrompt('Create a production roadmap for a new project')">Production Roadmap</button>
-        <button class="chip" onclick="runVisionPreview()">🔍 Vision QC (7B)</button>
-        <button class="chip" onclick="sendChipPrompt('Explain the Canva MCP export workflow')">Canva Guide</button>
+        <button class="chip" onclick="sendChipPrompt('What is the current project status and render progress?')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+          Project Status
+        </button>
+        <button class="chip" onclick="sendChipPrompt('What tools and integrations are available?')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+          Available Tools
+        </button>
+        <button class="chip" onclick="sendChipPrompt('Help me brainstorm ideas for a new video series')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          Brainstorm
+        </button>
+        <button class="chip" onclick="sendChipPrompt('Create a production roadmap for a new project')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          Roadmap
+        </button>
+        <button class="chip" onclick="runVisionPreview()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Vision QC
+        </button>
+        <button class="chip" onclick="sendChipPrompt('Explain the Canva MCP export workflow')">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+          Canva Guide
+        </button>
       </div>
 
       <!-- Chat Stream -->
@@ -379,8 +450,8 @@
         <div class="chat-bubble assistant">
           <div class="bubble-meta">OpenClaw • Qwen 2.5 Local</div>
           <div class="bubble-text">
-            👋 <strong>Welcome to OpenClaw Local Studio IDE!</strong><br><br>
-            I am connected to your local <strong>Qwen 2.5 Coder (14B)</strong> and ready to help with <strong>any video production project</strong>, creative brainstorming, or general tasks. I have access to <strong>Composio + Canva</strong> tools, Blender 5.1 render status, and more.<br><br>
+            <strong>Welcome to OpenClaw Local Studio IDE!</strong><br><br>
+            I am connected to your local <strong>Qwen 2.5 Coder (14B)</strong> and ready to help with <strong>any video production project</strong>, creative brainstorming, or general tasks. I have access to <strong>Composio + Canva</strong> tools, Blender render status, and more.<br><br>
             How can I assist you with the production?
           </div>
         </div>
@@ -391,10 +462,18 @@
         <div id="imagePreviews" class="image-previews" style="display:none;"></div>
         <textarea id="chatInput" placeholder="Ask OpenClaw or prompt Qwen 2.5... (paste / drop an image here to analyze it with the qwen2.5vl 7B vision model)" rows="9"></textarea>
         <div class="chat-input-controls">
-          <button class="btn-history" id="btnChatHistory" title="View recent prompts (persisted server-side)" onclick="togglePromptHistory()">🕘 History</button>
-          <button class="btn-history" id="btnMic" title="Dictate via microphone (speech recognition)" onclick="toggleSttMic()">🎤</button>
-          <span class="char-hint">Enter to send • Shift+Enter newline • 📷 paste or drop an image → Vision 7B</span>
-          <button class="btn-send" id="btnSendChat">Send ➔</button>
+          <button class="btn-history" id="btnChatHistory" title="View recent prompts" onclick="togglePromptHistory()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            History
+          </button>
+          <button class="btn-history" id="btnMic" title="Dictate via microphone" onclick="toggleSttMic()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </button>
+          <span class="char-hint">Enter to send • Shift+Enter newline • paste or drop image → Vision 7B</span>
+          <button class="btn-send" id="btnSendChat">
+            Send
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          </button>
         </div>
       </div>
     </aside>
@@ -403,15 +482,33 @@
   <!-- Status Bar Footer -->
   <footer class="status-bar">
     <div class="status-left">
-      <span class="status-item"><span class="icon">📁</span> <span id="projectName">OpenClaw IDE</span></span>
-      <span class="status-item" id="sbBlender"><span class="icon">🧊</span> Blender: —</span>
-      <span class="status-item" id="sbOllama"><span class="icon">🧠</span> Ollama: 127.0.0.1:11434</span>
-      <span class="status-item" id="sbModel"><span class="icon">🤖</span> Model: …</span>
+      <span class="status-item">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+        <span id="projectName">OpenClaw IDE</span>
+      </span>
+      <span class="status-item" id="sbBlender">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12l4-4 4 4M12 16V8"/></svg>
+        Blender: —
+      </span>
+      <span class="status-item" id="sbOllama">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+        Ollama: 127.0.0.1:11434
+      </span>
+      <span class="status-item" id="sbModel">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Model: …
+      </span>
     </div>
     <div class="status-right">
       <span class="status-item" id="sbLines">UTF-8</span>
-      <span class="status-item" id="sbCanva"><span class="icon">🎨</span> Canva: —</span>
-      <span class="status-item" id="sbBattery"><span class="icon">⚡</span> Battery: —</span>
+      <span class="status-item" id="sbCanva">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+        Canva: —
+      </span>
+      <span class="status-item" id="sbBattery">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Battery: —
+      </span>
     </div>
   </footer>
 
