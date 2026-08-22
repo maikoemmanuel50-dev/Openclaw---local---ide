@@ -1,32 +1,32 @@
-/* OpenClaw Local IDE — Dark Teal + White + Gold */
+/* OpenClaw Local IDE — Dark Forest Green + White + Gold */
 :root {
   /* ── 60% BASE: White editor surface ── */
   --bg-main: #ffffff;
   --bg-editor: #ffffff;
   --bg-dropdown: #ffffff;
 
-  /* ── 30% SECONDARY: Teal structural surfaces ── */
-  --green-50: #f0fdfa;
-  --green-100: #ccfbf1;
-  --green-200: #99f6e4;
-  --green-300: #5eead4;
-  --green-400: #2dd4bf;
-  --green-500: #0f766e;
-  --green-600: #0d6d66;
-  --green-700: #0b625b;
-  --green-800: #094e49;
-  --green-900: #073d3a;
-  --green-950: #042f2d;
+  /* ── 30% SECONDARY: Dark Forest Green ── */
+  --green-50: #f0f7f4;
+  --green-100: #d4e8df;
+  --green-200: #a8d1bf;
+  --green-300: #7cba9f;
+  --green-400: #5a9d82;
+  --green-500: #3d7a63;
+  --green-600: #336654;
+  --green-700: #2a5345;
+  --green-800: #214037;
+  --green-900: #1a332c;
+  --green-950: #12231f;
 
   --secondary: var(--green-500);
   --secondary-light: var(--green-100);
   --secondary-dark: var(--green-800);
 
-  /* Structural teal surfaces */
-  --bg-sidebar: var(--green-500);
-  --bg-surface: var(--green-600);
-  --bg-hover: var(--green-700);
-  --bg-active: var(--green-800);
+  /* Structural green surfaces */
+  --bg-sidebar: var(--green-600);
+  --bg-surface: var(--green-700);
+  --bg-hover: var(--green-800);
+  --bg-active: var(--green-900);
   --bg-card: var(--green-50);
 
   /* ── 10% ACCENT: Gold ── */
