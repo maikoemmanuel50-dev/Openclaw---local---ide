@@ -940,7 +940,7 @@ body {
 }
 .mode-toggle-group {
   display: flex;
-  background: var(--bg-card);
+  background: #fef3c7;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   padding: 3px;
@@ -1009,7 +1009,8 @@ body {
   padding: 10px 14px;
   overflow-x: auto;
   border-bottom: none;
-  background: var(--bg-card);
+  background: #fef3c7;
+  margin-bottom: 4px;
 }
 .chip {
   background: transparent;
