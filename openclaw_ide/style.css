@@ -947,13 +947,13 @@ body {
   gap: 3px;
 }
 .mode-btn {
-  background: transparent;
-  border: none;
-  color: #111827;
+  background: #ffffff;
+  border: 1px solid var(--gold-200);
+  color: var(--gold-600);
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 10px;
-  border-radius: var(--radius-md);
+  padding: 5px 12px;
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
@@ -967,13 +967,13 @@ body {
   height: 12px;
 }
 .mode-btn:hover {
-  color: #000000;
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--gold-100);
+  border-color: var(--gold-300);
 }
 .mode-btn.active {
   background: var(--accent);
   color: var(--text-on-gold);
-  box-shadow: 0 0 12px rgba(251, 191, 36, 0.3);
+  border-color: var(--accent);
 }
 .badge-status-online {
   background: rgba(255, 255, 255, 0.15);
