@@ -1,0 +1,62 @@
+---
+title: Delivery Standards
+category: Production Standards
+tags: delivery, encode, resolution, fps, bitrate, lufs, safe-margins, verify
+source: docs/DELIVERY_STANDARDS.md, .cursor/rules/africa-s1-delivery-standards.mdc, docs/FIDELITY_EXECUTION_GUIDE.md
+---
+
+# Delivery Standards (hard verify targets)
+
+Quantifiable targets for **every** episode delivered. These are hard numbers,
+not style guidance — verify against them before marking any render/export
+"done" in `PRODUCTION_STATUS.md`. Full copy lives at
+`Africa Season 1\docs\DELIVERY_STANDARDS.md`. 4K/HDR out of scope until
+`PRE_4K_GATE.md` closes.
+
+## Video (current SDR / non-4K)
+
+| Parameter | Target |
+|---|---|
+| Resolution | 1920×1080 minimum. Never upscale from a lower native render. |
+| Frame rate | Match Blender native fps exactly (24) end-to-end. Never conform 24↔30. |
+| Codec / container | H.264 High Profile, MP4, closed GOP at half the frame rate. |
+| Bitrate | 8–12 Mbps 1080p VBR (2-pass); top of range for high-motion kinetic/stock. |
+| Chroma / bit depth | 4:2:0, 8-bit min (SDR). |
+| Color space | Rec. 709. |
+| CRF near-lossless | `libx264 -crf 18 -preset slow -pix_fmt yuv420p`. |
+| 4K upload (gate cleared) | 35–45 Mbps H.264 High. |
+
+## Audio
+
+| Parameter | Target |
+|---|---|
+| Sample rate | 48 kHz |
+| Codec | AAC-LC |
+| Bitrate | 320–384 kbps stereo |
+| Loudness | −14 LUFS integrated |
+| True peak | ≤ −1 dBTP |
+
+YouTube turns down louder-than-−14 LUFS but does not boost quiet audio —
+undershooting is worse than overshooting.
+
+## Safe margins
+
+| Zone | Margin |
+|---|---|
+| Title-safe | Center 80% (10% all sides) |
+| Action-safe | Center 90% |
+| Caption / L3 exclusion | Avoid bottom ~15% |
+| Watermark exclusion | Avoid top-right ~15% |
+
+## Pipeline consistency
+
+- Canva exports 1920×1080 exact — no upscale on Resolve ingest.
+- One fps at Blender, Canva, Resolve timeline, final export — confirm before assembly.
+- Keep uncompressed/high-bitrate master before YouTube-spec export.
+- Archive master: DNxHR HQX (QuickTime, Windows).
+
+## Definition of done
+
+Launching a job ≠ done. Before updating `PRODUCTION_STATUS.md`: verify
+resolution, fps, duration, file sanity, that the file plays. Do not apply 4K
+bitrate/resolution numbers while the gate is open.

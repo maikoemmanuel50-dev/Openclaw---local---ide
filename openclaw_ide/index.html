@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenClaw Studio IDE — Local Production Platform</title>
+  <link rel="stylesheet" href="style.css?v=2.0">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-box">
+        <span class="logo-orb"></span>
+        <span class="logo-title">OPENCLAW <span class="logo-accent">IDE</span></span>
+      </div>
+      <span class="workspace-badge" id="workspaceBadge">OpenClaw Local IDE</span>
+    </div>
+
+    <div class="header-center">
+      <div class="status-pill model-pill" id="modelPill">
+        <span class="dot-indicator green"></span>
+        <span class="pill-label">Model:</span>
+        <span class="pill-val" id="modelVal">Qwen 2.5 Coder 14B (Local)</span>
+      </div>
+
+      <div class="status-pill render-pill" id="renderPill">
+        <span class="dot-indicator pulse-amber" id="renderDot"></span>
+        <span class="pill-label">Cycles Render:</span>
+        <span class="pill-val" id="renderVal">Scanning...</span>
+      </div>
+
+      <div class="status-pill battery-pill" id="batteryPill">
+        <span class="pill-icon" id="powerIcon">⚡</span>
+        <span class="pill-val" id="batteryVal">Battery: --%</span>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="mcp-badges">
+        <span class="mcp-badge active" id="crestodianBadge" title="Crestodian Security & Attestations">🛡️ Crestodian</span>
+        <span class="mcp-badge active" title="Composio Canva Authenticated">🎨 Canva MCP</span>
+        <span class="mcp-badge active" title="Blender 5.1.2 Integration">🧊 Blender 5.1</span>
+        <span class="mcp-badge" title="DaVinci Resolve Bridge">🎬 Resolve</span>
+      </div>
+      <button class="btn-quick" id="btnRefreshAll" title="Refresh Live Data">🔄 Refresh</button>
+    </div>
+  </header>
+
+  <!-- Main IDE Workspace Container -->
+  <div class="ide-container">
+    <!-- Left Activity Bar -->
+    <nav class="activity-bar">
+      <button class="act-btn active" data-view="files" title="Explorer (Files & Scripts)">📁</button>
+      <button class="act-btn" data-view="render" title="Render Pipeline Dashboard">🎬</button>
+      <button class="act-btn" data-view="crestodian" title="Crestodian Workspace Guard & Attestations">🛡️</button>
+      <button class="act-btn" data-view="copyright" title="Copyright Guardrail Protocol & Clearance">©</button>
+      <button class="act-btn" data-view="trace" title="Agent Execution Trace & Feedback Loop">🧭</button>
+      <button class="act-btn" data-view="trajectory" title="Model Activity & Trajectory">📊</button>
+      <button class="act-btn" data-view="tools" title="MCP & Connected Tools (Canva/Blender)">🛠️</button>
+      <button class="act-btn" data-view="guides" title="Knowledge Base & Guides">📚</button>
+      <button class="act-btn" data-view="hourly" title="Hourly Production Report">⏰</button>
+      <button class="act-btn" data-view="audio" title="Audio Assets (TTS / Sound Library)">🎵</button>
+      <div class="act-spacer"></div>
+      <button class="act-btn" data-view="power" title="Power & Full-Throttle Strategy">⚡</button>
+      <button class="act-btn" data-view="settings" title="Agent Settings & Rules">⚙️</button>
+    </nav>
+
+    <!-- Sidebar Drawer -->
+    <aside class="sidebar-drawer" id="sidebarDrawer">
+      <!-- View 1: Explorer -->
+      <div class="sidebar-view active" id="viewFiles">
+        <div class="sidebar-header">
+          <h3>WORKSPACE EXPLORER</h3>
+          <button class="icon-btn" id="btnReloadTree" title="Refresh Files">↻</button>
+        </div>
+        <div class="search-box">
+          <input type="text" id="fileSearch" placeholder="Search scripts, docs, configs..." />
+        </div>
+        <div class="file-tree" id="fileTreeContainer">
+          <div class="loading-state">Loading workspace tree...</div>
+        </div>
+      </div>
+
+      <!-- View 2: Render Pipeline Dashboard -->
+      <div class="sidebar-view" id="viewRender">
+        <div class="sidebar-header">
+          <h3 id="renderPipelineTitle">RENDER PIPELINE</h3>
+          <span class="badge-accent" id="renderReadyBadge">Loading...</span>
+        </div>
+        <div class="gate-status-box" id="gateStatusBox" style="display:none;">
+          <span class="gate-label" id="gateLabel">4K STATUS:</span>
+          <span class="gate-val" id="gateVal">—</span>
+        </div>
+        <div class="scene-list" id="sceneListContainer">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- View: Crestodian Security & Attestations -->
+      <div class="sidebar-view" id="viewCrestodian">
+        <div class="sidebar-header">
+          <h3>CRESTODIAN WORKSPACE GUARD</h3>
+          <span class="badge-accent" id="crestodianCountBadge">Attested</span>
+        </div>
+        <div class="gate-status-box">
+          <span class="gate-label">CUSTODIAN STATE:</span>
+          <span class="gate-val" style="color: var(--accent-emerald);">ENFORCED</span>
+        </div>
+        <div class="tool-cards">
+          <div class="tool-card active">
+            <div class="tool-top">
+              <span class="tool-title">🛡️ Workspace Attestation</span>
+              <span class="tool-status ok" id="attestStatusText">2 Verified</span>
+            </div>
+            <p class="tool-desc">Directory: <code>C:\Users\HP\.openclaw\workspace-attestations</code></p>
+            <div class="tool-actions">
+              <button class="btn-tool" onclick="verifyAttestation()">Verify Attestation</button>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-top">
+              <span class="tool-title">📜 Audit Trail (crestodian.jsonl)</span>
+              <span class="tool-status ok">Logging</span>
+            </div>
+            <div class="audit-list" id="crestodianAuditList" style="font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); max-height: 140px; overflow-y: auto; margin-top: 6px;">
+              Loading audit logs...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- View: Copyright Guardrail Protocol -->
+      <div class="sidebar-view" id="viewCopyright">
+        <div class="sidebar-header">
+          <h3>COPYRIGHT GUARDRAIL</h3>
+          <span class="badge-accent" id="copyrightBadge">Protocol Active</span>
+        </div>
+        <div class="copyright-content" id="copyrightContent">
+          <div class="loading-state">Loading protocol...</div>
+        </div>
+      </div>
+
+      <!-- View: Agent Trace -->
+      <div class="sidebar-view" id="viewTrace">
+        <div class="sidebar-header">
+          <h3>AGENT EXECUTION TRACE</h3>
+          <button class="icon-btn" id="btnReloadTrace" title="Refresh trace" onclick="loadAgentTrace()">↻</button>
+        </div>
+        <div class="trace-content" id="traceContent">
+          <div class="loading-state">Loading execution trace...</div>
+        </div>
+      </div>
+
+      <!-- View: Model Activity & Trajectory -->
+      <div class="sidebar-view" id="viewTrajectory">
+        <div class="sidebar-header">
+          <h3>MODEL ACTIVITY & TRAJECTORY</h3>
+          <button class="icon-btn" id="btnReloadTrajectory" title="Refresh trajectory" onclick="loadTrajectory()">↻</button>
+        </div>
+        <div class="trajectory-content" id="trajectoryContent">
+          <div class="loading-state">Loading model trajectory...</div>
+        </div>
+      </div>
+
+      <!-- View: Hourly Production Report -->
+      <div class="sidebar-view" id="viewHourly">
+        <div class="sidebar-header">
+          <h3>HOURLY PRODUCTION REPORT</h3>
+          <button class="icon-btn" id="btnRefreshHourly" title="Refresh report" onclick="loadHourlyPanel()">↻</button>
+        </div>
+        <div class="hourly-content" id="hourlyContent">
+          <div class="loading-state">Loading hourly report...</div>
+        </div>
+        <div class="hourly-actions">
+          <button class="btn-tool" id="btnRunHourly" onclick="runHourlyReport()">▶️ Run Report Now</button>
+        </div>
+      </div>
+
+      <!-- View: Audio Assets -->
+      <div class="sidebar-view" id="viewAudio">
+        <div class="sidebar-header">
+          <h3>AUDIO ASSETS & TOOLS</h3>
+          <button class="icon-btn" id="btnRefreshAudio" title="Refresh audio files" onclick="loadAudioFiles()">↻</button>
+        </div>
+        <div class="audio-actions">
+          <button class="btn-tool" id="btnMicSidebar" title="Dictate into chat via speech recognition">🎤 Dictate into Chat</button>
+        </div>
+        <div class="audio-file-list" id="audioFileList">
+          <div class="loading-state">Loading audio files...</div>
+        </div>
+      </div>
+
+      <!-- View: Power & Full-Throttle -->
+      <div class="sidebar-view" id="viewPower">
+        <div class="sidebar-header">
+          <h3>POWER & FULL-THROTTLE</h3>
+          <button class="icon-btn" id="btnReloadPower" title="Refresh power state" onclick="loadPowerPanel()">↻</button>
+        </div>
+        <div class="power-content" id="powerContent">
+          <div class="loading-state">Loading power state...</div>
+        </div>
+      </div>
+
+      <!-- View 3: Tools & MCP Hub -->
+      <div class="sidebar-view" id="viewTools">
+        <div class="sidebar-header">
+          <h3>CONNECTED TOOLS & MCPS</h3>
+        </div>
+        <div class="tool-cards">
+          <div class="tool-card active">
+            <div class="tool-top">
+              <span class="tool-title">🎨 Composio + Canva</span>
+              <span class="tool-status ok">Connected</span>
+            </div>
+            <p class="tool-desc">Account: <code id="canvaAccount">—</code>. Kinetic graphics & multi-format exports.</p>
+            <div class="tool-actions">
+              <button class="btn-tool" onclick="triggerToolAction('canva_exports')">Export PNGs</button>
+              <button class="btn-tool" onclick="triggerToolAction('unique_assets')">Import Stills</button>
+            </div>
+          </div>
+
+          <div class="tool-card active">
+            <div class="tool-top">
+              <span class="tool-title">🤖 Local Qwen 2.5 (Ollama)</span>
+              <span class="tool-status ok">Active :11434</span>
+            </div>
+            <p class="tool-desc">Model: <code>qwen2.5-coder:14b</code>. Zero-token private agent backend.</p>
+            <div class="tool-actions">
+              <button class="btn-tool" onclick="triggerToolAction('ping_qwen')">Ping Local Qwen</button>
+            </div>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-top">
+              <span class="tool-title">🧊 Blender MCP</span>
+              <span class="tool-status" id="blenderToolStatus">Port 9876</span>
+            </div>
+            <p class="tool-desc">Headless Cycles rendering, GPU-accelerated.</p>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-top">
+              <span class="tool-title">🎞️ DaVinci Resolve Bridge</span>
+              <span class="tool-status" id="resolveToolStatus">Port 49632</span>
+            </div>
+            <p class="tool-desc">Timeline: <code id="resolveTimeline">—</code>. Fairlight audio & markers.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- View 4: Guides & Knowledge -->
+      <div class="sidebar-view" id="viewGuides">
+        <div class="sidebar-header">
+          <h3>KNOWLEDGE & GUIDES</h3>
+        </div>
+        <div class="guide-list" id="guideListContainer">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- View 5: Settings -->
+      <div class="sidebar-view" id="viewSettings">
+        <div class="sidebar-header">
+          <h3>AGENT CONFIG & RULES</h3>
+        </div>
+        <div class="settings-content">
+          <div class="setting-group">
+            <label>Project Name</label>
+            <input type="text" id="settingProjectName" value="—" readonly />
+          </div>
+          <div class="setting-group">
+            <label>Ollama Endpoint</label>
+            <input type="text" value="http://127.0.0.1:11434" readonly />
+          </div>
+          <div class="setting-group">
+            <label>Active Local Model</label>
+            <input type="text" value="qwen2.5-coder:14b" readonly />
+          </div>
+          <div class="setting-group">
+            <label>Render Root</label>
+            <input type="text" id="settingRenderRoot" value="—" readonly />
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Resize handle: sidebar ↔ editor -->
+    <div class="resize-handle resize-v" id="resizeSidebar" title="Drag to resize sidebar"></div>
+
+    <!-- Center Editor / Viewer Area -->
+    <main class="editor-area">
+      <!-- Editor Tabs Bar -->
+      <div class="editor-tabs-bar" id="tabsBar">
+      </div>
+
+      <!-- Editor Toolbar -->
+      <div class="editor-toolbar">
+        <span class="file-path-display" id="activeFilePath">No file open</span>
+        <div class="toolbar-actions">
+          <button class="btn-toolbar" id="btnSaveFile" title="Save changes (Ctrl+S)">💾 Save</button>
+          <button class="btn-toolbar" id="btnTogglePreview" title="Toggle Rendered Preview">👁️ Preview</button>
+        </div>
+      </div>
+
+      <!-- Editor Work Surface -->
+      <div class="editor-surface">
+        <textarea class="code-editor" id="codeEditor" spellcheck="false"></textarea>
+        <div class="markdown-preview hidden" id="markdownPreview"></div>
+      </div>
+
+      <!-- Resize handle: editor ↔ bottom panel -->
+      <div class="resize-handle resize-h" id="resizeBottom" title="Drag to resize log panel"></div>
+
+      <!-- Bottom Panel (Console / Logs) -->
+      <div class="bottom-panel" id="bottomPanel">
+        <div class="panel-header">
+          <div class="panel-tabs" id="logTabs">
+            <button class="panel-tab active" data-log="terminal">Shell Exec</button>
+          </div>
+          <div class="panel-controls">
+            <button class="icon-btn" id="btnRefreshLog" title="Refresh Log">↻</button>
+            <button class="icon-btn" id="btnToggleBottom" title="Collapse Panel">▾</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <pre class="log-stream" id="logStreamContent">Loading log stream...</pre>
+          <div class="terminal-box hidden" id="terminalBox">
+            <div class="term-output" id="termOutput">Type PowerShell command or OpenClaw dispatch below...</div>
+            <div class="term-input-row">
+              <span class="term-prompt">&gt;</span>
+              <input type="text" id="termInput" placeholder="e.g. python scripts/qwen_local.py ping" />
+              <button id="btnRunTerm">Execute</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Resize handle: editor ↔ agent panel -->
+    <div class="resize-handle resize-v" id="resizeAgent" title="Drag to resize agent panel"></div>
+
+    <!-- Right OpenClaw Agent Chat Panel -->
+    <aside class="agent-panel" id="agentPanel">
+      <div class="agent-header">
+        <div class="agent-title-box">
+          <span class="agent-avatar" id="agentAvatar">🦅</span>
+          <div>
+            <div class="agent-name" id="agentTitle">OpenClaw Gateway</div>
+            <div class="agent-sub" id="agentSubtitle">Direct Native Execution • Port 18789</div>
+          </div>
+        </div>
+        <div class="agent-header-controls">
+          <div class="mode-toggle-group">
+            <button class="mode-btn active" id="modePlan" onclick="setAgentEngineMode('plan')" title="Plan Mode — Fast brainstorming, planning, explaining (VL 7B model)">📝 Plan</button>
+            <button class="mode-btn" id="modeBuild" onclick="setAgentEngineMode('build')" title="Build Mode — Agentic execution, tool-calling, production tasks (14B coder)">🔧 Build</button>
+            <button class="mode-btn" id="modeVision" onclick="setAgentEngineMode('vision')" title="Vision Mode — Visual QC of render frames (VL 7B)">👁️ Vision</button>
+          </div>
+          <span class="badge-status-online" id="netStatusBadge" title="OpenClaw Gateway active on port 18789">● Direct Live</span>
+        </div>
+      </div>
+
+      <!-- Prompt Chips -->
+      <div class="prompt-chips">
+        <button class="chip" onclick="sendChipPrompt('What is the current project status and render progress?')">Project Status</button>
+        <button class="chip" onclick="sendChipPrompt('What tools and integrations are available?')">Available Tools</button>
+        <button class="chip" onclick="sendChipPrompt('Help me brainstorm ideas for a new video series')">Brainstorm Ideas</button>
+        <button class="chip" onclick="sendChipPrompt('Create a production roadmap for a new project')">Production Roadmap</button>
+        <button class="chip" onclick="runVisionPreview()">🔍 Vision QC (7B)</button>
+        <button class="chip" onclick="sendChipPrompt('Explain the Canva MCP export workflow')">Canva Guide</button>
+      </div>
+
+      <!-- Chat Stream -->
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-bubble assistant">
+          <div class="bubble-meta">OpenClaw • Qwen 2.5 Local</div>
+          <div class="bubble-text">
+            👋 <strong>Welcome to OpenClaw Local Studio IDE!</strong><br><br>
+            I am connected to your local <strong>Qwen 2.5 Coder (14B)</strong> and ready to help with <strong>any video production project</strong>, creative brainstorming, or general tasks. I have access to <strong>Composio + Canva</strong> tools, Blender 5.1 render status, and more.<br><br>
+            How can I assist you with the production?
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Box -->
+      <div class="chat-input-box">
+        <div id="imagePreviews" class="image-previews" style="display:none;"></div>
+        <textarea id="chatInput" placeholder="Ask OpenClaw or prompt Qwen 2.5... (paste / drop an image here to analyze it with the qwen2.5vl 7B vision model)" rows="9"></textarea>
+        <div class="chat-input-controls">
+          <button class="btn-history" id="btnChatHistory" title="View recent prompts (persisted server-side)" onclick="togglePromptHistory()">🕘 History</button>
+          <button class="btn-history" id="btnMic" title="Dictate via microphone (speech recognition)" onclick="toggleSttMic()">🎤</button>
+          <span class="char-hint">Enter to send • Shift+Enter newline • 📷 paste or drop an image → Vision 7B</span>
+          <button class="btn-send" id="btnSendChat">Send ➔</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Status Bar Footer -->
+  <footer class="status-bar">
+    <div class="status-left">
+      <span class="status-item"><span class="icon">📁</span> <span id="projectName">OpenClaw IDE</span></span>
+      <span class="status-item" id="sbBlender"><span class="icon">🧊</span> Blender: —</span>
+      <span class="status-item" id="sbOllama"><span class="icon">🧠</span> Ollama: 127.0.0.1:11434</span>
+      <span class="status-item" id="sbModel"><span class="icon">🤖</span> Model: …</span>
+    </div>
+    <div class="status-right">
+      <span class="status-item" id="sbLines">UTF-8</span>
+      <span class="status-item" id="sbCanva"><span class="icon">🎨</span> Canva: —</span>
+      <span class="status-item" id="sbBattery"><span class="icon">⚡</span> Battery: —</span>
+    </div>
+  </footer>
+
+  <!-- Toast Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

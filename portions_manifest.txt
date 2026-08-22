@@ -1,0 +1,17 @@
+rebuilt_master=C:\Users\HP\OneDrive\The Vault\Africa Season 1\Africa_S1_Silicon_Savannah_7min_rebuilt.mp4
+intro=portion_00: 4K pan 30s + AFRICA slide transition
+portion_00=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_00.mp4
+portion_01=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_01.mp4
+portion_02=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_02.mp4
+portion_03=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_03.mp4
+portion_04=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_04.mp4
+portion_05=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_05.mp4
+portion_06=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_06.mp4
+portion_07=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_07.mp4
+portion_08=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_08.mp4
+portion_09=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_09.mp4
+portion_10=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_10.mp4
+portion_11=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_11.mp4
+portion_12=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_12.mp4
+portion_13=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_13.mp4
+portion_14=C:\Users\HP\OneDrive\The Vault\Africa Season 1\portions_30s\portion_14.mp4

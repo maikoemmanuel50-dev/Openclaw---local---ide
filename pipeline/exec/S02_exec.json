@@ -1,0 +1,225 @@
+{
+  "scene": "S02",
+  "name": "Context 2007",
+  "frame_range": [
+    1200,
+    2280
+  ],
+  "fps": 24,
+  "steps": [
+    {
+      "op": "import_plane",
+      "layer": "bg",
+      "z": -2,
+      "content": "Warm retro yellow gradient",
+      "notes": "Layer BG at Z=-2: Warm retro yellow gradient"
+    },
+    {
+      "op": "import_plane",
+      "layer": "mid",
+      "z": -1,
+      "content": "Phone kiosk illustration",
+      "notes": "Layer MID at Z=-1: Phone kiosk illustration"
+    },
+    {
+      "op": "import_plane",
+      "layer": "fg",
+      "z": 0,
+      "content": "Nokia handsets on display",
+      "notes": "Layer FG at Z=+0: Nokia handsets on display"
+    },
+    {
+      "op": "import_plane",
+      "layer": "overlay",
+      "z": 1,
+      "content": "M-Pesa flow diagram",
+      "notes": "Layer OVERLAY at Z=+1: M-Pesa flow diagram"
+    },
+    {
+      "op": "import_plane",
+      "layer": "ui",
+      "z": 2,
+      "content": "2007 year label + M-PESA title card",
+      "notes": "Layer UI at Z=+2: 2007 year label + M-PESA title card"
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/canva/s2_kiosk_2007.png",
+      "mode": "existing_image",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/canva/s2_kiosk_2007.png",
+      "exists": true
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/diagrams/s2_mpesa_flow.svg",
+      "mode": "new_generate",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/diagrams/s2_mpesa_flow.svg",
+      "exists": false
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/icons/icon_phone.svg",
+      "mode": "new_generate",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/icons/icon_phone.svg",
+      "exists": false
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/icons/icon_agent.svg",
+      "mode": "new_generate",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/icons/icon_agent.svg",
+      "exists": false
+    },
+    {
+      "op": "camera",
+      "motion": "Pan L->R",
+      "frame_range": [
+        1200,
+        2280
+      ],
+      "duration_sec": 45,
+      "fov": 45
+    },
+    {
+      "op": "animate",
+      "element": "Year label",
+      "anim": "Slam in scale 1.2->1.0",
+      "trigger_word": "2007",
+      "frames": {
+        "absolute": [
+          60,
+          72
+        ],
+        "raw": "60-72"
+      },
+      "keyframe": {
+        "start": 60,
+        "end": 72
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Title card M-PESA",
+      "anim": "Fade in center-top",
+      "trigger_word": "M-Pesa",
+      "frames": {
+        "absolute": [
+          120,
+          140
+        ],
+        "raw": "120-140"
+      },
+      "keyframe": {
+        "start": 120,
+        "end": 140
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Flow step 1 phone icon",
+      "anim": "Slide in from left",
+      "trigger_word": "no bank account",
+      "frames": {
+        "absolute": [
+          300,
+          320
+        ],
+        "raw": "300-320"
+      },
+      "keyframe": {
+        "start": 300,
+        "end": 320
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Flow step 2 agent icon",
+      "anim": "Slide in",
+      "trigger_word": "bank branches",
+      "frames": {
+        "absolute": [
+          480,
+          500
+        ],
+        "raw": "480-500"
+      },
+      "keyframe": {
+        "start": 480,
+        "end": 500
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Flow step 3 recipient icon",
+      "anim": "Slide in",
+      "trigger_word": "text message",
+      "frames": {
+        "absolute": [
+          660,
+          680
+        ],
+        "raw": "660-680"
+      },
+      "keyframe": {
+        "start": 660,
+        "end": 680
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Connector arrows",
+      "anim": "Draw-on animation",
+      "trigger_word": "blueprint",
+      "frames": {
+        "absolute": [
+          960,
+          1000
+        ],
+        "raw": "960-1000"
+      },
+      "keyframe": {
+        "start": 960,
+        "end": 1000
+      }
+    },
+    {
+      "op": "text_object",
+      "string": "2007",
+      "style": "Stat 96px",
+      "timing_sec": 2.5,
+      "timing_frame": 60.0
+    },
+    {
+      "op": "text_object",
+      "string": "M-PESA",
+      "style": "Headline 72px",
+      "timing_sec": 5,
+      "timing_frame": 120
+    },
+    {
+      "op": "text_object",
+      "string": "Phone -> Agent -> Recipient",
+      "style": "Label 36px staggered",
+      "timing_sec": "12-22",
+      "timing_frame": null
+    },
+    {
+      "op": "render",
+      "contract": {
+        "engine": "CYCLES",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "fps": 24,
+        "samples": 64,
+        "device": "GPU",
+        "output_root": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters",
+        "naming": "frame_%04d.png"
+      },
+      "output": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters/02_Context2007/frame_%04d.png",
+      "frame_start": 1200,
+      "frame_end": 2280
+    }
+  ]
+}

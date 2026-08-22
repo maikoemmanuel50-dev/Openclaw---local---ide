@@ -1,0 +1,154 @@
+[
+  {
+    "scene": "S01",
+    "text": "Nairobi",
+    "style": "Label 36px",
+    "timing_sec": 3,
+    "timing_frame": 72,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S01",
+    "text": "Silicon Savannah",
+    "style": "Headline 72px",
+    "timing_sec": 47,
+    "timing_frame": 1128,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S02",
+    "text": "2007",
+    "style": "Stat 96px",
+    "timing_sec": 2.5,
+    "timing_frame": 60.0,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S02",
+    "text": "M-PESA",
+    "style": "Headline 72px",
+    "timing_sec": 5,
+    "timing_frame": 120,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S02",
+    "text": "Phone -> Agent -> Recipient",
+    "style": "Label 36px staggered",
+    "timing_sec": "12-22",
+    "timing_frame": "TBD",
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S03",
+    "text": "iHub 2010",
+    "style": "Label 36px",
+    "timing_sec": 10,
+    "timing_frame": 240,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S03",
+    "text": "Andela",
+    "style": "Label 36px",
+    "timing_sec": 22,
+    "timing_frame": 528,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S03",
+    "text": "NaiLab",
+    "style": "Label 36px",
+    "timing_sec": 30,
+    "timing_frame": 720,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S04",
+    "text": "Mobile-First",
+    "style": "Headline 72px",
+    "timing_sec": 15,
+    "timing_frame": 360,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S05",
+    "text": "$984M",
+    "style": "Stat 96px neon green",
+    "timing_sec": 7.5,
+    "timing_frame": 180.0,
+    "template": "TextStat"
+  },
+  {
+    "scene": "S05",
+    "text": "Fintech",
+    "style": "Label 36px",
+    "timing_sec": 15,
+    "timing_frame": 360,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S05",
+    "text": "Climate/Energy",
+    "style": "Label 36px",
+    "timing_sec": 22,
+    "timing_frame": 528,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S05",
+    "text": "82%",
+    "style": "Stat 96px accent",
+    "timing_sec": 32,
+    "timing_frame": 768,
+    "template": "TextStat"
+  },
+  {
+    "scene": "S06",
+    "text": "Pay-As-You-Go Solar",
+    "style": "Headline 72px",
+    "timing_sec": 22,
+    "timing_frame": 528,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S07",
+    "text": "97%",
+    "style": "Stat 96px",
+    "timing_sec": 30,
+    "timing_frame": 720,
+    "template": "TextStat"
+  },
+  {
+    "scene": "S09",
+    "text": "Lagos",
+    "style": "Label 36px",
+    "timing_sec": 55,
+    "timing_frame": 1320,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S09",
+    "text": "Kigali",
+    "style": "Label 36px",
+    "timing_sec": 58,
+    "timing_frame": 1392,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S09",
+    "text": "Accra",
+    "style": "Label 36px",
+    "timing_sec": 61,
+    "timing_frame": 1464,
+    "template": "TextBasic"
+  },
+  {
+    "scene": "S10",
+    "text": "AFRICA",
+    "style": "Logo 120px",
+    "timing_sec": 2,
+    "timing_frame": 48,
+    "template": "TextBasic"
+  }
+]

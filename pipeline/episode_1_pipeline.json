@@ -1,0 +1,319 @@
+{
+  "episode": 1,
+  "title": "Silicon Savannah",
+  "generated_at": "2026-08-15 08:33",
+  "fps": 24,
+  "total_frames": 10080,
+  "total_duration_sec": 420,
+  "scenes": [
+    {
+      "id": "S01",
+      "name": "Cold Open",
+      "chapter": "Dawn",
+      "camera": "Push-In",
+      "frame_range": [
+        0,
+        1200
+      ],
+      "duration_sec": 50,
+      "frames": 1200,
+      "blender_prompt": "pipeline/prompts/S01_blender.py",
+      "blender_exec": "pipeline/exec/S01_exec.json",
+      "render_folder": "01_ColdOpen",
+      "resolve_overlays": "pipeline/scenes/S01_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S01",
+        "assets": [
+          {
+            "asset": "assets/canva/s1_dawn_skyline.png",
+            "type": "existing",
+            "status": "APPROVED"
+          },
+          {
+            "asset": "assets/canva/s1_matatu_silhouettes.png",
+            "type": "existing",
+            "status": "APPROVED"
+          },
+          {
+            "asset": "assets/diagrams/s1_digital_paths.svg",
+            "type": "new",
+            "status": "APPROVED"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S02",
+      "name": "Context 2007",
+      "chapter": "Dawn",
+      "camera": "Pan L->R",
+      "frame_range": [
+        1200,
+        2280
+      ],
+      "duration_sec": 45,
+      "frames": 1080,
+      "blender_prompt": "pipeline/prompts/S02_blender.py",
+      "blender_exec": "pipeline/exec/S02_exec.json",
+      "render_folder": "02_Context2007",
+      "resolve_overlays": "pipeline/scenes/S02_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S02",
+        "assets": [
+          {
+            "asset": "assets/canva/s2_kiosk_2007.png",
+            "type": "existing",
+            "status": "APPROVED"
+          },
+          {
+            "asset": "assets/diagrams/s2_mpesa_flow.svg",
+            "type": "new",
+            "status": "APPROVED"
+          },
+          {
+            "asset": "assets/icons/icon_phone.svg",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          },
+          {
+            "asset": "assets/icons/icon_agent.svg",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S03",
+      "name": "Beat 1: The Hubs",
+      "chapter": "Daylight",
+      "camera": "Parallax Drift L->R",
+      "frame_range": [
+        2280,
+        3360
+      ],
+      "duration_sec": 45,
+      "frames": 1080,
+      "blender_prompt": "pipeline/prompts/S03_blender.py",
+      "blender_exec": "pipeline/exec/S03_exec.json",
+      "render_folder": "03_Beat1_Hubs",
+      "resolve_overlays": "pipeline/scenes/S03_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S03",
+        "assets": [
+          {
+            "asset": "assets/canva/s3_coworking.png",
+            "type": "existing",
+            "status": "APPROVED"
+          },
+          {
+            "asset": "assets/diagrams/s3_hub_cards.svg",
+            "type": "new",
+            "status": "APPROVED"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S04",
+      "name": "Beat 1: Phone Close-Up",
+      "chapter": "Daylight",
+      "camera": "Push-In tight",
+      "frame_range": [
+        3360,
+        3960
+      ],
+      "duration_sec": 25,
+      "frames": 600,
+      "blender_prompt": "pipeline/prompts/S04_blender.py",
+      "blender_exec": "pipeline/exec/S04_exec.json",
+      "render_folder": "04_Beat1_Phone",
+      "resolve_overlays": "pipeline/scenes/S04_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S04",
+        "assets": [
+          {
+            "asset": "assets/canva/s4_phone_hand.png",
+            "type": "existing",
+            "status": "APPROVED"
+          }
+        ],
+        "has_new_creations": false
+      }
+    },
+    {
+      "id": "S05",
+      "name": "Beat 2: The Money",
+      "chapter": "DarkData",
+      "camera": "Push-In",
+      "frame_range": [
+        3960,
+        5040
+      ],
+      "duration_sec": 45,
+      "frames": 1080,
+      "blender_prompt": "pipeline/prompts/S05_blender.py",
+      "blender_exec": "pipeline/exec/S05_exec.json",
+      "render_folder": "05_Beat2_Money",
+      "resolve_overlays": "pipeline/scenes/S05_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S05",
+        "assets": [
+          {
+            "asset": "blend/africa_s1_master_v01.blend Scene 05",
+            "type": "existing",
+            "status": "NEEDS_CLEARANCE"
+          },
+          {
+            "asset": "Blender text objects / Resolve overlay for sector labels",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S06",
+      "name": "Beat 2: Solar",
+      "chapter": "DarkData",
+      "camera": "Parallax Drift",
+      "frame_range": [
+        5040,
+        6000
+      ],
+      "duration_sec": 40,
+      "frames": 960,
+      "blender_prompt": "pipeline/prompts/S06_blender.py",
+      "blender_exec": "pipeline/exec/S06_exec.json",
+      "render_folder": "06_Beat2_Solar",
+      "resolve_overlays": "pipeline/scenes/S06_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S06",
+        "assets": [
+          {
+            "asset": "assets/diagrams/s6_solar_flow.svg",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S07",
+      "name": "Beat 3: The Gap",
+      "chapter": "CoolTension",
+      "camera": "Custom zoom-out",
+      "frame_range": [
+        6000,
+        7200
+      ],
+      "duration_sec": 50,
+      "frames": 1200,
+      "blender_prompt": "pipeline/prompts/S07_blender.py",
+      "blender_exec": "pipeline/exec/S07_exec.json",
+      "render_folder": "07_Beat3_Gap",
+      "resolve_overlays": "pipeline/scenes/S07_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S07",
+        "assets": [
+          {
+            "asset": "assets/maps/kenya_map_hi_contrast.svg",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S08",
+      "name": "Beat 3: Secondary City",
+      "chapter": "CoolTension",
+      "camera": "Parallax Drift",
+      "frame_range": [
+        7200,
+        8040
+      ],
+      "duration_sec": 35,
+      "frames": 840,
+      "blender_prompt": "pipeline/prompts/S08_blender.py",
+      "blender_exec": "pipeline/exec/S08_exec.json",
+      "render_folder": "08_Beat3_SecondaryCity",
+      "resolve_overlays": "pipeline/scenes/S08_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S08",
+        "assets": [
+          {
+            "asset": "assets/canva/s8_regional_town.png",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S09",
+      "name": "Closer",
+      "chapter": "HopefulDusk",
+      "camera": "Push-In ending wide hold",
+      "frame_range": [
+        8040,
+        9720
+      ],
+      "duration_sec": 70,
+      "frames": 1680,
+      "blender_prompt": "pipeline/prompts/S09_blender.py",
+      "blender_exec": "pipeline/exec/S09_exec.json",
+      "render_folder": "09_Closer",
+      "resolve_overlays": "pipeline/scenes/S09_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S09",
+        "assets": [
+          {
+            "asset": "assets/icons/icon_microsoft.svg",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          },
+          {
+            "asset": "assets/icons/icon_visa.svg",
+            "type": "new",
+            "status": "NEEDS_CLEARANCE"
+          },
+          {
+            "asset": "assets/diagrams/s9_global_icons.svg",
+            "type": "new",
+            "status": "APPROVED"
+          }
+        ],
+        "has_new_creations": true
+      }
+    },
+    {
+      "id": "S10",
+      "name": "End Card",
+      "chapter": "HopefulDusk",
+      "camera": "Static wide",
+      "frame_range": [
+        9720,
+        10080
+      ],
+      "duration_sec": 15,
+      "frames": 360,
+      "blender_prompt": "pipeline/prompts/S10_blender.py",
+      "blender_exec": "pipeline/exec/S10_exec.json",
+      "render_folder": "10_EndCard",
+      "resolve_overlays": "pipeline/scenes/S10_resolve_overlays.json",
+      "copyright_gate": {
+        "scene": "S10",
+        "assets": [],
+        "has_new_creations": false
+      }
+    }
+  ]
+}

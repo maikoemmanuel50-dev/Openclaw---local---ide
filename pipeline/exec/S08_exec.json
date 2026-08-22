@@ -1,0 +1,108 @@
+{
+  "scene": "S08",
+  "name": "Beat 3: Secondary City",
+  "frame_range": [
+    7200,
+    8040
+  ],
+  "fps": 24,
+  "steps": [
+    {
+      "op": "import_plane",
+      "layer": "bg",
+      "z": -2,
+      "content": "Dusty regional town street (Mombasa/Kisumu style)",
+      "notes": "Layer BG at Z=-2: Dusty regional town street (Mombasa/Kisumu style)"
+    },
+    {
+      "op": "import_plane",
+      "layer": "mid",
+      "z": -1,
+      "content": "Small shop, cyclist passing by",
+      "notes": "Layer MID at Z=-1: Small shop, cyclist passing by"
+    },
+    {
+      "op": "import_plane",
+      "layer": "fg",
+      "z": 0,
+      "content": "Dust particles ambient",
+      "notes": "Layer FG at Z=+0: Dust particles ambient"
+    },
+    {
+      "op": "import_plane",
+      "layer": "ui",
+      "z": 2,
+      "content": "City name labels muted",
+      "notes": "Layer UI at Z=+2: City name labels muted"
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/canva/s8_regional_town.png",
+      "mode": "new_generate",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/canva/s8_regional_town.png",
+      "exists": false
+    },
+    {
+      "op": "camera",
+      "motion": "Parallax Drift",
+      "frame_range": [
+        7200,
+        8040
+      ],
+      "duration_sec": 35,
+      "fov": 45
+    },
+    {
+      "op": "animate",
+      "element": "Shopkeeper figure",
+      "anim": "Subtle idle motion",
+      "trigger_word": "founders",
+      "frames": {
+        "absolute": [
+          120,
+          300
+        ],
+        "raw": "120-300"
+      },
+      "keyframe": {
+        "start": 120,
+        "end": 300
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Road/path overlay",
+      "anim": "Draw-on dashed lines",
+      "trigger_word": "infrastructure",
+      "frames": {
+        "absolute": [
+          420,
+          600
+        ],
+        "raw": "420-600"
+      },
+      "keyframe": {
+        "start": 420,
+        "end": 600
+      }
+    },
+    {
+      "op": "render",
+      "contract": {
+        "engine": "CYCLES",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "fps": 24,
+        "samples": 64,
+        "device": "GPU",
+        "output_root": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters",
+        "naming": "frame_%04d.png"
+      },
+      "output": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters/08_Beat3_SecondaryCity/frame_%04d.png",
+      "frame_start": 7200,
+      "frame_end": 8040
+    }
+  ]
+}

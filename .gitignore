@@ -1,0 +1,51 @@
+# Render logs
+*_log.txt
+*_log_*.txt
+*_log_*.err
+*_stderr.txt
+*_stdout.txt
+
+# Delivery intermediates
+renders/
+*.mp4
+*.m4v
+ffmpeg2pass-*.log
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Server / watchdog logs
+openclaw_ide/server_console.*
+openclaw_ide/server_detached.*
+openclaw_ide/watchdog.log
+
+# Agent traces
+.agent_trace.jsonl
+.prompt_log.jsonl
+
+# Sensitive / large status files
+STATUS_*.txt
+
+# All binary assets — tracked locally only
+assets/
+blend/
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.m4a
+*.hdr
+*.exr
+*.blend
+*.blend1
+*.jpg
+*.png
+*.svg
+
+# Binary docs
+docs/telegram_imports/
+docs/_claude_*.png
+
+# macOS
+.DS_Store

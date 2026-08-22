@@ -1,0 +1,191 @@
+{
+  "scene": "S03",
+  "name": "Beat 1: The Hubs",
+  "frame_range": [
+    2280,
+    3360
+  ],
+  "fps": 24,
+  "steps": [
+    {
+      "op": "import_plane",
+      "layer": "bg",
+      "z": -2,
+      "content": "Co-working interior",
+      "notes": "Layer BG at Z=-2: Co-working interior"
+    },
+    {
+      "op": "import_plane",
+      "layer": "mid",
+      "z": -1,
+      "content": "Desks, laptops, whiteboards",
+      "notes": "Layer MID at Z=-1: Desks, laptops, whiteboards"
+    },
+    {
+      "op": "import_plane",
+      "layer": "fg",
+      "z": 0,
+      "content": "Plants, foreground desk edge",
+      "notes": "Layer FG at Z=+0: Plants, foreground desk edge"
+    },
+    {
+      "op": "import_plane",
+      "layer": "overlay",
+      "z": 1,
+      "content": "Hub cards",
+      "notes": "Layer OVERLAY at Z=+1: Hub cards"
+    },
+    {
+      "op": "import_plane",
+      "layer": "ui",
+      "z": 2,
+      "content": "Card labels (iHub, Andela, NaiLab)",
+      "notes": "Layer UI at Z=+2: Card labels (iHub, Andela, NaiLab)"
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/canva/s3_coworking.png",
+      "mode": "existing_image",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/canva/s3_coworking.png",
+      "exists": true
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/diagrams/s3_hub_cards.svg",
+      "mode": "new_generate",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/diagrams/s3_hub_cards.svg",
+      "exists": false
+    },
+    {
+      "op": "camera",
+      "motion": "Parallax Drift L->R",
+      "frame_range": [
+        2280,
+        3360
+      ],
+      "duration_sec": 45,
+      "fov": 45
+    },
+    {
+      "op": "animate",
+      "element": "Card 1 iHub 2010",
+      "anim": "Stagger slide-in delay 0",
+      "trigger_word": "iHub",
+      "frames": {
+        "absolute": [
+          240,
+          260
+        ],
+        "raw": "240-260"
+      },
+      "keyframe": {
+        "start": 240,
+        "end": 260
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Card 2 Andela",
+      "anim": "Stagger slide-in delay 12f",
+      "trigger_word": "Andela",
+      "frames": {
+        "absolute": [
+          540,
+          560
+        ],
+        "raw": "540-560"
+      },
+      "keyframe": {
+        "start": 540,
+        "end": 560
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Card 3 NaiLab",
+      "anim": "Stagger slide-in delay 24f",
+      "trigger_word": "NaiLab",
+      "frames": {
+        "absolute": [
+          720,
+          740
+        ],
+        "raw": "720-740"
+      },
+      "keyframe": {
+        "start": 720,
+        "end": 740
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Laptop screens",
+      "anim": "Screen flicker loop",
+      "trigger_word": "desks",
+      "frames": {
+        "absolute": null,
+        "raw": "continuous"
+      },
+      "keyframe": {
+        "start": 2280,
+        "end": 3360
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Whiteboard lines",
+      "anim": "Draw-on",
+      "trigger_word": "whiteboards",
+      "frames": {
+        "absolute": [
+          400,
+          480
+        ],
+        "raw": "400-480"
+      },
+      "keyframe": {
+        "start": 400,
+        "end": 480
+      }
+    },
+    {
+      "op": "text_object",
+      "string": "iHub 2010",
+      "style": "Label 36px",
+      "timing_sec": 10,
+      "timing_frame": 240
+    },
+    {
+      "op": "text_object",
+      "string": "Andela",
+      "style": "Label 36px",
+      "timing_sec": 22,
+      "timing_frame": 528
+    },
+    {
+      "op": "text_object",
+      "string": "NaiLab",
+      "style": "Label 36px",
+      "timing_sec": 30,
+      "timing_frame": 720
+    },
+    {
+      "op": "render",
+      "contract": {
+        "engine": "CYCLES",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "fps": 24,
+        "samples": 64,
+        "device": "GPU",
+        "output_root": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters",
+        "naming": "frame_%04d.png"
+      },
+      "output": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters/03_Beat1_Hubs/frame_%04d.png",
+      "frame_start": 2280,
+      "frame_end": 3360
+    }
+  ]
+}

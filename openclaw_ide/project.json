@@ -1,0 +1,31 @@
+{
+  "name": "Africa Season 1",
+  "episode": "Silicon Savannah",
+  "renderRoot": "C:\\Users\\HP\\OneDrive\\The Vault\\Africa Season 1\\renders",
+  "scriptsRoot": "C:\\Users\\HP\\OneDrive\\The Vault\\Africa Season 1\\scripts",
+  "blenderPath": "C:\\Program Files\\Blender Foundation\\Blender 5.1\\blender.exe",
+  "renderScripts": {
+    "renderMp4": "C:\\Users\\HP\\OneDrive\\The Vault\\Africa Season 1\\render_scenes_mp4.py",
+    "render4k": "C:\\Users\\HP\\OneDrive\\The Vault\\Africa Season 1\\render_scenes_4k.py"
+  },
+  "delivery": {
+    "resolution": "1080p",
+    "targetFps": 24,
+    "targetDuration": "7:00"
+  },
+  "gates": {
+    "4kHold": true,
+    "gpuOneMax": true,
+    "blenderOnly": "5.1.2"
+  },
+  "tools": {
+    "canva": {"account": "canva_airway-sasin"},
+    "blender": {"port": 9876},
+    "resolve": {"port": 49632}
+  },
+  "logFiles": [
+    "wait_hq_assemble_log.txt",
+    "sasa_hq_rerender_log.txt",
+    "STATUS_POWER_CHECKPOINT.txt"
+  ]
+}

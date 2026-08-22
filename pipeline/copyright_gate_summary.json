@@ -1,0 +1,155 @@
+{
+  "scenes": [
+    {
+      "id": "S01",
+      "name": "Cold Open",
+      "assets": [
+        {
+          "asset": "assets/canva/s1_dawn_skyline.png",
+          "type": "existing",
+          "status": "APPROVED"
+        },
+        {
+          "asset": "assets/canva/s1_matatu_silhouettes.png",
+          "type": "existing",
+          "status": "APPROVED"
+        },
+        {
+          "asset": "assets/diagrams/s1_digital_paths.svg",
+          "type": "new",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "name": "Context 2007",
+      "assets": [
+        {
+          "asset": "assets/canva/s2_kiosk_2007.png",
+          "type": "existing",
+          "status": "APPROVED"
+        },
+        {
+          "asset": "assets/diagrams/s2_mpesa_flow.svg",
+          "type": "new",
+          "status": "APPROVED"
+        },
+        {
+          "asset": "assets/icons/icon_phone.svg",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        },
+        {
+          "asset": "assets/icons/icon_agent.svg",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "name": "Beat 1: The Hubs",
+      "assets": [
+        {
+          "asset": "assets/canva/s3_coworking.png",
+          "type": "existing",
+          "status": "APPROVED"
+        },
+        {
+          "asset": "assets/diagrams/s3_hub_cards.svg",
+          "type": "new",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "name": "Beat 1: Phone Close-Up",
+      "assets": [
+        {
+          "asset": "assets/canva/s4_phone_hand.png",
+          "type": "existing",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "S05",
+      "name": "Beat 2: The Money",
+      "assets": [
+        {
+          "asset": "blend/africa_s1_master_v01.blend Scene 05",
+          "type": "existing",
+          "status": "NEEDS_CLEARANCE"
+        },
+        {
+          "asset": "Blender text objects / Resolve overlay for sector labels",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        }
+      ]
+    },
+    {
+      "id": "S06",
+      "name": "Beat 2: Solar",
+      "assets": [
+        {
+          "asset": "assets/diagrams/s6_solar_flow.svg",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        }
+      ]
+    },
+    {
+      "id": "S07",
+      "name": "Beat 3: The Gap",
+      "assets": [
+        {
+          "asset": "assets/maps/kenya_map_hi_contrast.svg",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        }
+      ]
+    },
+    {
+      "id": "S08",
+      "name": "Beat 3: Secondary City",
+      "assets": [
+        {
+          "asset": "assets/canva/s8_regional_town.png",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        }
+      ]
+    },
+    {
+      "id": "S09",
+      "name": "Closer",
+      "assets": [
+        {
+          "asset": "assets/icons/icon_microsoft.svg",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        },
+        {
+          "asset": "assets/icons/icon_visa.svg",
+          "type": "new",
+          "status": "NEEDS_CLEARANCE"
+        },
+        {
+          "asset": "assets/diagrams/s9_global_icons.svg",
+          "type": "new",
+          "status": "APPROVED"
+        }
+      ]
+    },
+    {
+      "id": "S10",
+      "name": "End Card",
+      "assets": []
+    }
+  ],
+  "total_new_assets": 12,
+  "needs_clearance": 9
+}

@@ -1,0 +1,52 @@
+# Yellow Ball morph / pop markers for Resolve Episode 01
+# frame = relative to timeline start (0 = first frame), 24fps
+
+project: "Africa Season 1"
+timeline: "Episode 01 - Assembly"
+motif: "Sasa Yellow Ball"
+
+markers:
+  - frame: 0
+    name: "BALL S0 Seed"
+    color: Lemon
+    note: "Yellow ball rises with dawn"
+  - frame: 360
+    name: "BALL S1 Pulse POP"
+    color: Yellow
+    note: "money moved — pulse + path trails"
+  - frame: 1200
+    name: "BALL S2 Coin morph"
+    color: Sand
+    note: "M-Pesa coin transform"
+  - frame: 2520
+    name: "BALL S3 Hub split"
+    color: Mint
+    note: "Split into 3 hub orbs"
+  - frame: 3360
+    name: "BALL S4 Phone"
+    color: Sky
+    note: "Compress into phone glow"
+  - frame: 3720
+    name: "BALL S5 Chart POP"
+    color: Green
+    note: "$984M mega pop"
+  - frame: 4560
+    name: "BALL S6 Solar BURST"
+    color: Lemon
+    note: "Solar disc ray burst"
+  - frame: 5400
+    name: "BALL S7 Pin IMPACT"
+    color: Red
+    note: "97% map pin slam"
+  - frame: 6240
+    name: "BALL S8 Quiet"
+    color: Cocoa
+    note: "Desaturated secondary city"
+  - frame: 6840
+    name: "BALL S9 Constellation"
+    color: Purple
+    note: "Gold constellation burst"
+  - frame: 8280
+    name: "BALL S10 Emblem"
+    color: Yellow
+    note: "Settles into AFRICA logo core"

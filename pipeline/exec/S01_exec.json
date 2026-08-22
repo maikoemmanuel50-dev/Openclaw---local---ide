@@ -1,0 +1,211 @@
+{
+  "scene": "S01",
+  "name": "Cold Open",
+  "frame_range": [
+    0,
+    1200
+  ],
+  "fps": 24,
+  "steps": [
+    {
+      "op": "import_plane",
+      "layer": "bg",
+      "z": -2,
+      "content": "Dawn gradient sky (warm orange-purple)",
+      "notes": "Layer BG at Z=-2: Dawn gradient sky (warm orange-purple)"
+    },
+    {
+      "op": "import_plane",
+      "layer": "mid",
+      "z": -1,
+      "content": "CBD tower silhouettes (UAP Tower, Times Tower)",
+      "notes": "Layer MID at Z=-1: CBD tower silhouettes (UAP Tower, Times Tower)"
+    },
+    {
+      "op": "import_plane",
+      "layer": "fg",
+      "z": 0,
+      "content": "Matatu + motorbike silhouettes",
+      "notes": "Layer FG at Z=+0: Matatu + motorbike silhouettes"
+    },
+    {
+      "op": "import_plane",
+      "layer": "overlay",
+      "z": 1,
+      "content": "Digital transaction paths",
+      "notes": "Layer OVERLAY at Z=+1: Digital transaction paths"
+    },
+    {
+      "op": "import_plane",
+      "layer": "ui",
+      "z": 2,
+      "content": "Nairobi location label + Silicon Savannah title",
+      "notes": "Layer UI at Z=+2: Nairobi location label + Silicon Savannah title"
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/canva/s1_dawn_skyline.png",
+      "mode": "existing_image",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/canva/s1_dawn_skyline.png",
+      "exists": true
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/canva/s1_matatu_silhouettes.png",
+      "mode": "existing_image",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/canva/s1_matatu_silhouettes.png",
+      "exists": true
+    },
+    {
+      "op": "texture_plane",
+      "asset": "assets/diagrams/s1_digital_paths.svg",
+      "mode": "new_generate",
+      "path": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/assets/diagrams/s1_digital_paths.svg",
+      "exists": false
+    },
+    {
+      "op": "camera",
+      "motion": "Push-In",
+      "frame_range": [
+        0,
+        1200
+      ],
+      "duration_sec": 50,
+      "fov": 45
+    },
+    {
+      "op": "animate",
+      "element": "Location label",
+      "anim": "Fade in + slide up",
+      "trigger_word": "Nairobi",
+      "frames": {
+        "absolute": [
+          72,
+          80
+        ],
+        "raw": "72-80"
+      },
+      "keyframe": {
+        "start": 72,
+        "end": 80
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Matatu silhouettes",
+      "anim": "Subtle bounce 2px Y",
+      "trigger_word": "matatus",
+      "frames": {
+        "absolute": [
+          180,
+          200
+        ],
+        "raw": "180-200"
+      },
+      "keyframe": {
+        "start": 180,
+        "end": 200
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Transaction paths overlay",
+      "anim": "Fade in 0->0.7 opacity, paths animate L->R",
+      "trigger_word": "pockets",
+      "frames": {
+        "absolute": [
+          360,
+          480
+        ],
+        "raw": "360-480"
+      },
+      "keyframe": {
+        "start": 360,
+        "end": 480
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Path pulse",
+      "anim": "Glow pulse on path nodes",
+      "trigger_word": "money has already moved",
+      "frames": {
+        "absolute": [
+          540,
+          600
+        ],
+        "raw": "540-600"
+      },
+      "keyframe": {
+        "start": 540,
+        "end": 600
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Path convergence",
+      "anim": "Lines converge to phone icon",
+      "trigger_word": "phone",
+      "frames": {
+        "absolute": [
+          720,
+          780
+        ],
+        "raw": "720-780"
+      },
+      "keyframe": {
+        "start": 720,
+        "end": 780
+      }
+    },
+    {
+      "op": "animate",
+      "element": "Subtitle label",
+      "anim": "Fade in below Nairobi",
+      "trigger_word": "Silicon Savannah",
+      "frames": {
+        "absolute": [
+          1140,
+          1200
+        ],
+        "raw": "1140-1200"
+      },
+      "keyframe": {
+        "start": 1140,
+        "end": 1200
+      }
+    },
+    {
+      "op": "text_object",
+      "string": "Nairobi",
+      "style": "Label 36px",
+      "timing_sec": 3,
+      "timing_frame": 72
+    },
+    {
+      "op": "text_object",
+      "string": "Silicon Savannah",
+      "style": "Headline 72px",
+      "timing_sec": 47,
+      "timing_frame": 1128
+    },
+    {
+      "op": "render",
+      "contract": {
+        "engine": "CYCLES",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "fps": 24,
+        "samples": 64,
+        "device": "GPU",
+        "output_root": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters",
+        "naming": "frame_%04d.png"
+      },
+      "output": "C:/Users/HP/OneDrive/The Vault/Africa Season 1/renders/video_clips/masters/01_ColdOpen/frame_%04d.png",
+      "frame_start": 0,
+      "frame_end": 1200
+    }
+  ]
+}

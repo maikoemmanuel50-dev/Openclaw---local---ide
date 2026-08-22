@@ -1,0 +1,428 @@
+# AFRICA S1 Episode 01 — Audio Design Map
+# Refs:
+#   TED-Ed https://youtu.be/2A1IEBFt6Xg
+#   Bloomberg Originals https://youtu.be/d2dgJGkw5p0
+#   Search Party https://youtu.be/5xm_luvYoc8
+#   docs/AUDIO_MIX_STANDARDS.md
+# Sync all timings to final VO track post-record (episode_01_vo.wav)
+
+project:
+  name: "Africa S1 - Silicon Savannah"
+  vo_file: "assets/audio/vo/episode_01_vo.wav"
+  sample_rate: 48000
+  bit_depth: 24
+  fps: 24
+  target_runtime_sec: 420
+
+mix:
+  vo_reference_db: 0
+  music_under_vo_db: -24
+  music_swell_db: -12
+  music_gap_swell_relative_db: 6
+  ambient_sfx_db: -28
+  punctuation_sfx_db: -18
+  stat_impact_sfx_db: -14
+  duck_amount_db: -18
+  duck_attack_ms: 18
+  duck_release_ms: 200
+  pre_reveal_dip_db: -6
+  pre_reveal_dip_duration_sec: 0.5
+  program_lufs: -14
+  true_peak_dbtp: -1
+
+# ── Chapter Music Beds ──────────────────────────────────────────────
+chapters:
+  - id: dawn
+    scenes: [S01, S02]
+    bed: "assets/audio/music/ch01_dawn_pad.wav"
+    bpm: 90
+    mood: "Gentle synth pad, warm, rising"
+    entry: "S01 frame 0"
+    exit: "S02 end — crossfade 2s to daylight"
+    crossfade_to: daylight
+
+  - id: daylight
+    scenes: [S03, S04]
+    bed: "assets/audio/music/ch02_daylight_lofi.wav"
+    bpm: 100
+    mood: "Light lo-fi rhythm, driving but soft"
+    entry: "S03 frame 0"
+    exit: "S04 end — cut to darkdata"
+    crossfade_to: darkdata
+
+  - id: darkdata
+    scenes: [S05, S06]
+    bed: "assets/audio/music/ch03_darkdata_electronic.wav"
+    bpm: 110
+    mood: "Electronic pulse, data-forward"
+    entry: "S05 frame 0"
+    exit: "S06 end — fade 1s to cooltension"
+    crossfade_to: cooltension
+
+  - id: cooltension
+    scenes: [S07, S08]
+    bed: "assets/audio/music/ch04_cooltension_drone.wav"
+    bpm: 80
+    mood: "Introspective drone, sparse"
+    entry: "S07 frame 0 — with pre-reveal dip"
+    exit: "S08 end — cut to hopefuldusk"
+    crossfade_to: hopefuldusk
+
+  - id: hopefuldusk
+    scenes: [S09, S10]
+    bed: "assets/audio/music/ch05_hopeful_dusk.wav"
+    bpm: 95
+    mood: "Warm swell, Kenyan percussion + synth"
+    entry: "S09 frame 0 — swell from silence"
+    exit: "S10 frame 300 — resolve chord, decay 2s"
+    resolve: "assets/audio/sfx/music_resolve.wav"
+
+# ── Section Reset Points (match resolve_spec.yaml markers) ──────────
+section_resets:
+  - frame: 0
+    name: "Cold Open"
+    music_chapter: dawn
+  - frame: 1080
+    name: "Context 2007"
+    music_chapter: dawn
+  - frame: 2040
+    name: "Beat 1 Hubs"
+    music_chapter: daylight
+  - frame: 3720
+    name: "Beat 2 Money"
+    music_chapter: darkdata
+  - frame: 5400
+    name: "Beat 3 Gap"
+    music_chapter: cooltension
+  - frame: 6840
+    name: "Closer"
+    music_chapter: hopefuldusk
+  - frame: 8280
+    name: "End Card"
+    music_chapter: hopefuldusk
+
+# ── SFX Inventory ───────────────────────────────────────────────────
+sfx_library:
+  # Ambient beds (continuous per scene)
+  - id: city_morning_ambient
+    file: "assets/audio/sfx/city_morning_ambient.wav"
+    type: ambient
+    level_db: -24
+    scenes: [S01]
+
+  - id: street_bustle
+    file: "assets/audio/sfx/street_bustle.wav"
+    type: ambient
+    level_db: -24
+    scenes: [S02]
+
+  - id: coworking_chatter
+    file: "assets/audio/sfx/coworking_chatter.wav"
+    type: ambient
+    level_db: -24
+    scenes: [S03]
+
+  - id: solar_hum
+    file: "assets/audio/sfx/solar_hum.wav"
+    type: ambient
+    level_db: -24
+    scenes: [S06]
+
+  - id: drone_ambient
+    file: "assets/audio/sfx/drone_ambient.wav"
+    type: ambient
+    level_db: -26
+    scenes: [S07, S08]
+
+  # Punctuation one-shots (triggered by VO words)
+  - id: matatu_horn
+    file: "assets/audio/sfx/matatu_horn.wav"
+    type: punctuation
+    level_db: -18
+    trigger_word: "matatus"
+    scene: S01
+
+  - id: transaction_chime
+    file: "assets/audio/sfx/transaction_chime.wav"
+    type: punctuation
+    level_db: -18
+    trigger_word: "money has already moved"
+    scene: S01
+
+  - id: brand_sting
+    file: "assets/audio/sfx/brand_sting.wav"
+    type: punctuation
+    level_db: -18
+    trigger_word: "M-Pesa"
+    scene: S02
+
+  - id: keypad_click
+    file: "assets/audio/sfx/keypad_click.wav"
+    type: punctuation
+    level_db: -18
+    trigger_word: "text message"
+    scene: S02
+
+  - id: keyboard_clack
+    file: "assets/audio/sfx/keyboard_clack.wav"
+    type: punctuation
+    level_db: -20
+    trigger_word: "desks"
+    scene: S03
+
+  - id: ui_swipe
+    file: "assets/audio/sfx/ui_swipe.wav"
+    type: punctuation
+    level_db: -18
+    trigger_word: "phone"
+    scene: S04
+
+  - id: chart_riser
+    file: "assets/audio/sfx/chart_riser.wav"
+    type: punctuation
+    level_db: -18
+    trigger_word: "measurable"
+    scene: S05
+
+  - id: stat_ping
+    file: "assets/audio/sfx/stat_ping.wav"
+    type: stat_impact
+    level_db: -14
+    trigger_word: "a billion dollars"
+    scene: S05
+
+  - id: stat_impact_82
+    file: "assets/audio/sfx/stat_impact.wav"
+    type: stat_impact
+    level_db: -14
+    trigger_word: "eighty-two percent"
+    scene: S05
+
+  - id: stat_impact_97
+    file: "assets/audio/sfx/stat_impact.wav"
+    type: stat_impact
+    level_db: -14
+    trigger_word: "ninety-seven percent"
+    scene: S07
+    pre_reveal_dip: true
+
+  - id: logo_fade
+    file: "assets/audio/sfx/logo_fade.wav"
+    type: punctuation
+    level_db: -20
+    trigger_word: "Microsoft"
+    scene: S09
+
+  - id: logo_fade_visa
+    file: "assets/audio/sfx/logo_fade.wav"
+    type: punctuation
+    level_db: -20
+    trigger_word: "Visa"
+    scene: S09
+
+  - id: logo_fade_un
+    file: "assets/audio/sfx/logo_fade.wav"
+    type: punctuation
+    level_db: -20
+    trigger_word: "United Nations"
+    scene: S09
+
+  - id: music_resolve
+    file: "assets/audio/sfx/music_resolve.wav"
+    type: resolve
+    level_db: -10
+    trigger: "S10 frame 300"
+    scene: S10
+
+# ── VO-Locked Cue Sheet (populate after VO record) ────────────────────
+# Replace estimated times with actual timestamps from episode_01_vo.wav
+vo_cue_sheet:
+  - scene: S01
+    cues:
+      - word: "Nairobi"
+        est_time_sec: 3.0
+        visual: "Nairobi label fade in"
+        sfx: null
+      - word: "matatus"
+        est_time_sec: 8.0
+        visual: "Matatu bounce"
+        sfx: matatu_horn
+      - word: "pockets"
+        est_time_sec: 15.0
+        visual: "Transaction paths overlay"
+        sfx: null
+      - word: "money has already moved"
+        est_time_sec: 22.0
+        visual: "Path pulse"
+        sfx: transaction_chime
+      - word: "Silicon Savannah"
+        est_time_sec: 47.0
+        visual: "Subtitle label"
+        sfx: null
+
+  - scene: S02
+    cues:
+      - word: "2007"
+        est_time_sec: 52.0
+        visual: "Year label slam"
+        sfx: null
+      - word: "M-Pesa"
+        est_time_sec: 58.0
+        visual: "M-PESA title card"
+        sfx: brand_sting
+      - word: "no bank account"
+        est_time_sec: 68.0
+        visual: "Flow step 1 phone icon"
+        sfx: null
+      - word: "bank branches"
+        est_time_sec: 78.0
+        visual: "Flow step 2 agent icon"
+        sfx: null
+      - word: "text message"
+        est_time_sec: 88.0
+        visual: "Flow step 3 recipient icon"
+        sfx: keypad_click
+      - word: "blueprint"
+        est_time_sec: 93.0
+        visual: "Arrow draw-on + slide_wipe to S03"
+        sfx: null
+
+  - scene: S03
+    cues:
+      - word: "iHub"
+        est_time_sec: 100.0
+        visual: "Card 1 stagger"
+        sfx: null
+      - word: "Andela"
+        est_time_sec: 112.0
+        visual: "Card 2 stagger"
+        sfx: null
+      - word: "NaiLab"
+        est_time_sec: 120.0
+        visual: "Card 3 stagger"
+        sfx: null
+
+  - scene: S04
+    cues:
+      - word: "phone"
+        est_time_sec: 138.0
+        visual: "UI scroll animation"
+        sfx: ui_swipe
+      - word: "small screen"
+        est_time_sec: 145.0
+        visual: "UI highlight boxes"
+        sfx: null
+      - word: "Mobile-First"
+        est_time_sec: 153.0
+        visual: "Label fade in"
+        sfx: null
+
+  - scene: S05
+    cues:
+      - word: "measurable"
+        est_time_sec: 163.0
+        visual: "Chart fade in"
+        sfx: chart_riser
+      - word: "a billion dollars"
+        est_time_sec: 170.0
+        visual: "$984M counter"
+        sfx: stat_ping
+      - word: "Fintech"
+        est_time_sec: 178.0
+        visual: "Fintech bar rises"
+        sfx: null
+      - word: "eighty-two percent"
+        est_time_sec: 195.0
+        visual: "82% callout glow"
+        sfx: stat_impact_82
+
+  - scene: S06
+    cues:
+      - word: "d.light"
+        est_time_sec: 208.0
+        visual: "Company tag 1"
+        sfx: null
+      - word: "M-Pesa instinct"
+        est_time_sec: 228.0
+        visual: "Pay-As-You-Go Solar label"
+        sfx: null
+
+  - scene: S07
+    cues:
+      - word: "ninety-seven percent"
+        est_time_sec: 248.0
+        visual: "97% stat slam"
+        sfx: stat_impact_97
+        pre_reveal_dip: true
+      - word: "Mombasa"
+        est_time_sec: 260.0
+        visual: "Mombasa dim marker"
+        sfx: null
+      - word: "Kisumu"
+        est_time_sec: 263.0
+        visual: "Kisumu dim marker"
+        sfx: null
+
+  - scene: S08
+    cues:
+      - word: "pre-seed"
+        est_time_sec: 285.0
+        visual: "Pre-seed gap label"
+        sfx: null
+
+  - scene: S09
+    cues:
+      - word: "Microsoft"
+        est_time_sec: 310.0
+        visual: "Logo silhouette 1"
+        sfx: logo_fade
+      - word: "Visa"
+        est_time_sec: 325.0
+        visual: "Logo silhouette 2"
+        sfx: logo_fade_visa
+      - word: "forecast"
+        est_time_sec: 360.0
+        visual: "Forecast text"
+        sfx: null
+
+  - scene: S10
+    cues:
+      - frame: 300
+        visual: "Fade to black + music resolve"
+        sfx: music_resolve
+
+# ── Fairlight Bus Layout ────────────────────────────────────────────
+fairlight_buses:
+  - name: "VO"
+    type: track
+    channels: 1
+    level_db: 0
+
+  - name: "Music"
+    type: track
+    channels: 2
+    level_db: -22
+    duck_source: "VO"
+    duck_amount_db: -12
+
+  - name: "Ambient SFX"
+    type: track
+    channels: 2
+    level_db: -24
+
+  - name: "Punctuation SFX"
+    type: track
+    channels: 2
+    level_db: -18
+
+  - name: "Stat Impact"
+    type: track
+    channels: 2
+    level_db: -14
+
+# ── Placeholder VO (TTS) ─────────────────────────────────────────────
+placeholder_vo:
+  enabled: true
+  file: "assets/audio/vo/episode_01_vo_placeholder.wav"
+  generator: "generate_placeholder_vo.py"
+  note: "Replace with recorded VO; re-slip all cues to final timestamps"
