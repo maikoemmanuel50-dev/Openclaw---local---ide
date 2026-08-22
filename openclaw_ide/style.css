@@ -342,7 +342,7 @@ body {
 .resize-handle::after {
   content: '';
   position: absolute;
-  background: var(--border-subtle);
+  background: var(--green-950);
   transition: background 0.15s;
 }
 .resize-handle:hover::after,
@@ -1007,22 +1007,21 @@ body {
   display: flex;
   gap: 8px;
   padding: 0;
-  overflow-x: visible;
+  overflow-x: auto;
   border-bottom: none;
   background: #fef3c7;
   margin-bottom: 0;
-  position: relative;
 }
 
-.prompt-chips::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+.green-divider {
   height: 12px;
+  width: 100%;
   background: var(--green-950);
+  flex-shrink: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
+
 .chip {
   background: transparent;
   border: none;
