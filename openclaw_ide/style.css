@@ -1,9 +1,9 @@
 /* OpenClaw Local IDE — Dark Forest Green + White + Gold */
 :root {
-  /* ── 60% BASE: Gold 100 Cream editor surface ── */
-  --bg-main: #fef3c7;
-  --bg-editor: #fef3c7;
-  --bg-dropdown: #fef3c7;
+  /* ── 60% BASE: Light green cream editor surface ── */
+  --bg-main: var(--bg-card);
+  --bg-editor: var(--bg-card);
+  --bg-dropdown: var(--bg-card);
 
   /* ── 30% SECONDARY: Dark Forest Green ── */
   --green-50: #f0f7f4;
@@ -184,9 +184,9 @@ body {
 }
 
 .workspace-badge {
-  background: var(--accent-light);
-  border: 1px solid var(--gold-200);
-  color: var(--accent-dark);
+  background: var(--bg-card);
+  border: 1px solid var(--green-200);
+  color: var(--green-800);
   padding: 3px 8px;
   border-radius: 12px;
   font-size: 11px;
