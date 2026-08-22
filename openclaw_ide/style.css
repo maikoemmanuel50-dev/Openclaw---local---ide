@@ -1020,7 +1020,7 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  height: 12px;
   background: var(--green-950);
 }
 .chip {
@@ -1029,7 +1029,7 @@ body {
   color: #111827;
   font-size: 11px;
   font-weight: 600;
-  padding: 10px 14px 6px 14px;
+  padding: 12px 14px 8px 14px;
   border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
