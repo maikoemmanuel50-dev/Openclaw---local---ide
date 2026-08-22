@@ -1012,7 +1012,7 @@ body {
   background: var(--bg-main);
 }
 .chip {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.15);
   border: none;
   color: #111827;
   font-size: 11px;
@@ -1031,7 +1031,7 @@ body {
   height: 12px;
 }
 .chip:hover {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .chat-messages {
