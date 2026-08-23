@@ -682,6 +682,14 @@ async function updateNetworkStatus() {
       badge.innerText = "● Gateway Offline";
       badge.title = "OpenClaw Gateway port 18789 is not listening";
     }
+    
+    // Gateway badge in header
+    const gatewayDot = document.getElementById("gatewayDot");
+    const gatewayVal = document.getElementById("gatewayVal");
+    if (data.gateway && gatewayDot && gatewayVal) {
+      gatewayDot.className = data.gateway.reachable ? "dot-indicator green" : "dot-indicator red";
+      gatewayVal.innerText = data.gateway.reachable ? "Online" : "Offline";
+    }
   } catch (e) {}
 }
 
@@ -1679,3 +1687,40 @@ function initAudioPanel() {
     });
   });
 })();
+
+// ── System Readiness Panel ──────────────────────────────────────────
+async function loadReadinessPanel() {
+  const container = document.getElementById("readinessContent");
+  if (!container) return;
+  try {
+    const res = await fetch("/api/readiness");
+    const data = await res.json();
+    const badge = document.getElementById("readinessBadge");
+    badge.className = data.overall === "ready" ? "badge-accent ok" : "badge-accent warn";
+    badge.innerText = data.overall.toUpperCase();
+    
+    let html = "";
+    for (const [key, check] of Object.entries(data.checks)) {
+      const icon = check.ok ? "✅" : "⚠️";
+      const cls = check.ok ? "ok" : "warn";
+      html += `
+        <div class="readiness-item ${cls}">
+          <span class="readiness-icon">${icon}</span>
+          <div class="readiness-detail">
+            <span class="readiness-name">${key.toUpperCase()}</span>
+            <span class="readiness-desc">${check.detail}</span>
+          </div>
+        </div>`;
+    }
+    container.innerHTML = html || "<div class='loading-state'>No checks available</div>";
+  } catch (e) {
+    container.innerHTML = `<div class="loading-state error">Readiness unavailable: ${e.message}</div>`;
+  }
+}
+
+// Add to DOMContentLoaded init
+document.addEventListener("DOMContentLoaded", () => {
+  // ... existing init code ...
+  loadReadinessPanel();
+  setInterval(loadReadinessPanel, 8000);
+});
