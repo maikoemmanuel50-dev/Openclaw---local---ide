@@ -2187,6 +2187,59 @@ DEEP_PLAN_PROMPT = (
 )
 
 
+def extract_plan_json(text):
+    """Extract the JSON block from Deep Plan reply (fenced or bare)."""
+    # Try fenced ```json ... ``` first
+    fenced = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
+    if fenced:
+        try:
+            return json.loads(fenced.group(1))
+        except Exception:
+            pass
+    # Try bare { ... } at end
+    bare = re.search(r"(\{.*\})\s*$", text, re.DOTALL)
+    if bare:
+        try:
+            return json.loads(bare.group(1))
+        except Exception:
+            pass
+    return None
+
+
+def save_plan_to_project(plan_json):
+    """Write plan to project.json atomically."""
+    config_path = IDE_ROOT / "project.json"
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except Exception:
+        config = {}
+    
+    config["plan"] = {
+        "version": 1,
+        "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "model": "qwen2.5-coder:7b",
+        "phases": plan_json.get("phases", []),
+        "tasks": plan_json.get("tasks", []),
+        "handoff": plan_json.get("handoff", {}),
+        "meta": {
+            "total_estimate_days": plan_json.get("total_estimate_days", 0),
+            "gates": plan_json.get("gates", []),
+            "handoff_ready": plan_json.get("handoff_ready", False)
+        }
+    }
+    
+    # Atomic write
+    tmp = config_path.with_suffix(".tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, config_path)
+    
+    # Reload global config
+    load_project_config()
+    return {"ok": True, "plan": config["plan"]}
+
+
 def plan_mission(mission_text, model=DEFAULT_MODEL):
     """Phase 1: analyze + rank a large prompt into ordered JSON steps.
 
@@ -2436,6 +2489,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
 
         if path == "/api/chat":
             self.handle_chat(payload)
+        elif path == "/api/plan/save":
+            self.handle_plan_save(payload)
         elif path == "/api/openclaw/direct":
             prompt = payload.get("prompt", "")
             session = payload.get("session", "")
@@ -3333,6 +3388,15 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": "Empty task"}, 400)
             return
         self._send_json(escalation_openclaw(task))
+
+    def handle_plan_save(self, payload):
+        plan_text = payload.get("plan_text", "")
+        plan_json = extract_plan_json(plan_text)
+        if not plan_json:
+            self._send_json({"ok": False, "error": "No valid JSON block found in plan"}, 400)
+            return
+        result = save_plan_to_project(plan_json)
+        self._send_json(result)
 
     def handle_agent_tools(self):
         self._send_json({
