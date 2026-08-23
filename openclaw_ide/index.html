@@ -435,11 +435,18 @@
       <!-- Resize handle: editor ↔ bottom panel -->
       <div class="resize-handle resize-h" id="resizeBottom" title="Drag to resize log panel"></div>
 
-      <!-- Bottom Panel (Console / Logs) -->
+      <!-- Bottom Panel (Toggle: Agent Reasoning / Log Output) -->
       <div class="bottom-panel" id="bottomPanel">
         <div class="panel-header">
-          <div class="panel-tabs" id="logTabs">
-            <button class="panel-tab active" data-log="terminal">Shell Exec</button>
+          <div class="panel-tabs" id="bottomTabs">
+            <button class="panel-tab active" data-view="reasoning" onclick="switchBottomView('reasoning')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+              Agent Reasoning
+            </button>
+            <button class="panel-tab" data-view="logs" onclick="switchBottomView('logs')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Log Output
+            </button>
           </div>
           <div class="panel-controls">
             <button class="icon-btn" id="btnRefreshLog" title="Refresh Log">↻</button>
@@ -447,18 +454,32 @@
           </div>
         </div>
         <div class="panel-body">
-          <pre class="log-stream" id="logStreamContent">Loading log stream...</pre>
-          <div class="terminal-box hidden" id="terminalBox">
-            <div class="term-output" id="termOutput">Type PowerShell command or OpenClaw dispatch below...</div>
-            <div class="term-input-row">
-              <span class="term-prompt">&gt;</span>
-              <input type="text" id="termInput" placeholder="e.g. python scripts/qwen_local.py ping" />
-              <button id="btnRunTerm">Execute</button>
+          <!-- Agent Reasoning View -->
+          <div class="view-content active" id="viewReasoning">
+            <div class="thinking-panel gold-theme" id="thinkingPanel" style="border-top: none; max-height: none; height: 100%;">
+              <div class="thinking-header" style="border-bottom: none; padding: 0;">
+                <h4 style="margin: 0 0 8px 0; font-size: 12px; font-weight: 600; color: var(--accent-gold);">🧠 Agent Thinking</h4>
+              </div>
+              <div class="thinking-content" id="thinkingContent" style="max-height: none; height: 100%; overflow-y: auto; padding: 8px;">
+                <div class="thinking-placeholder">Start a chat to see agent reasoning...</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Log Output View -->
+          <div class="view-content hidden" id="viewLogs">
+            <pre class="log-stream" id="logStreamContent">Loading log stream...</pre>
+            <div class="terminal-box hidden" id="terminalBox">
+              <div class="term-output" id="termOutput">Type PowerShell command or OpenClaw dispatch below...</div>
+              <div class="term-input-row">
+                <span class="term-prompt">></span>
+                <input type="text" id="termInput" placeholder="e.g. python scripts/qwen_local.py ping" />
+                <button id="btnRunTerm">Execute</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </main>
 
     <!-- Resize handle: editor ↔ agent panel -->
     <div class="resize-handle resize-v" id="resizeAgent" title="Drag to resize agent panel"></div>

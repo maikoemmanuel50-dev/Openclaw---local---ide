@@ -721,6 +721,7 @@ async function sendChat() {
   // trajectory data and render each round + its tool calls inline.
   const session = "ses_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const sessionBubbleId = appendSessionBubble();
+  initThinkingStream(session);
 
   try {
     const controller = new AbortController();
@@ -1994,6 +1995,139 @@ function debounce(fn, ms) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), ms);
   };
+}
+
+// ── Thinking Stream (SSE) ────────────────────────────────────────────
+let thinkingEventSource = null;
+
+function initThinkingStream(session) {
+  if (thinkingEventSource) {
+    thinkingEventSource.close();
+  }
+  
+  const content = document.getElementById("thinkingContent");
+  if (content) {
+    content.innerHTML = `<div class="thinking-placeholder">Connecting to agent stream...</div>`;
+  }
+  
+  thinkingEventSource = new EventSource(`/api/agent/stream?session=${encodeURIComponent(session)}`);
+  
+  thinkingEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      appendThinkingEvent(data);
+    } catch (e) {
+      console.warn("SSE parse error:", e);
+    }
+  };
+  
+  thinkingEventSource.onerror = (err) => {
+    console.warn("SSE connection error:", err);
+    const content = document.getElementById("thinkingContent");
+    if (content) {
+      content.innerHTML = `<div class="thinking-error">Stream disconnected. Reconnecting...</div>`;
+    }
+    // Auto-reconnect with exponential backoff
+    setTimeout(() => initThinkingStream(session), 3000);
+  };
+}
+
+function appendThinkingEvent(data) {
+  const content = document.getElementById("thinkingContent");
+  if (!content) return;
+  
+  // Remove placeholder on first event
+  if (content.querySelector(".thinking-placeholder")) {
+    content.innerHTML = "";
+  }
+  
+  const div = document.createElement("div");
+  div.className = `thinking-event thinking-${data.type}`;
+  
+  const icons = { thinking: "💭", round: "🧠", tool: "🔧", "loop.start": "🚀" };
+  const icon = icons[data.type] || "•";
+  
+  let html = `<span class="thinking-icon">${icon}</span>`;
+  html += `<span class="thinking-time">${data.ts || ""}</span>`;
+  
+  if (data.type === "round" && data.model_text) {
+    html += `<span class="thinking-text">${esc(data.model_text)}</span>`;
+  } else if (data.type === "tool" && data.tools) {
+    data.tools.forEach(t => {
+      html += `<div class="thinking-tool">${t.name}: ${t.args ? JSON.stringify(t.args).slice(0, 80) : ""}</div>`;
+    });
+  } else if (data.type === "loop.start") {
+    html += `<span class="thinking-text">Starting agent loop...</span>`;
+  }
+  
+  div.innerHTML = html;
+  content.appendChild(div);
+  content.scrollTop = content.scrollHeight;
+}
+
+function initThinkingStream(session) {
+  if (thinkingEventSource) {
+    thinkingEventSource.close();
+  }
+  
+  const content = document.getElementById("thinkingContent");
+  if (content) {
+    content.innerHTML = `<div class="thinking-placeholder">Connecting to agent stream...</div>`;
+  }
+  
+  thinkingEventSource = new EventSource(`/api/agent/stream?session=${encodeURIComponent(session)}`);
+  
+  thinkingEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      appendThinkingEvent(data);
+    } catch (e) {
+      console.warn("SSE parse error:", e);
+    }
+  };
+  
+  thinkingEventSource.onerror = (err) => {
+    console.warn("SSE connection error:", err);
+    const content = document.getElementById("thinkingContent");
+    if (content) {
+      content.innerHTML = `<div class="thinking-error">Stream disconnected. Reconnecting...</div>`;
+    }
+    // Auto-reconnect with exponential backoff
+    setTimeout(() => initThinkingStream(session), 3000);
+  };
+}
+
+function appendThinkingEvent(data) {
+  const content = document.getElementById("thinkingContent");
+  if (!content) return;
+  
+  // Remove placeholder on first event
+  if (content.querySelector(".thinking-placeholder")) {
+    content.innerHTML = "";
+  }
+  
+  const div = document.createElement("div");
+  div.className = `thinking-event thinking-${data.type}`;
+  
+  const icons = { thinking: "💭", round: "🧠", tool: "🔧", "loop.start": "🚀" };
+  const icon = icons[data.type] || "•";
+  
+  let html = `<span class="thinking-icon">${icon}</span>`;
+  html += `<span class="thinking-time">${data.ts || ""}</span>`;
+  
+  if (data.type === "round" && data.model_text) {
+    html += `<span class="thinking-text">${esc(data.model_text)}</span>`;
+  } else if (data.type === "tool" && data.tools) {
+    data.tools.forEach(t => {
+      html += `<div class="thinking-tool">${t.name}: ${t.args ? JSON.stringify(t.args).slice(0, 80) : ""}</div>`;
+    });
+  } else if (data.type === "loop.start") {
+    html += `<span class="thinking-text">Starting agent loop...</span>`;
+  }
+  
+  div.innerHTML = html;
+  content.appendChild(div);
+  content.scrollTop = content.scrollHeight;
 }
 
 // Add to DOMContentLoaded init

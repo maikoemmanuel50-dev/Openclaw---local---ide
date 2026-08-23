@@ -1839,10 +1839,10 @@ audio { display: block; }
 /* Thinking Panel */
 .thinking-panel {
   border-top: 1px solid var(--border);
-  background: var(--bg-deep);
+  background: var(--gold-100);  /* Gold background like logbox */
   display: flex;
   flex-direction: column;
-  max-height: 300px;
+  max-height: 100%;  /* Match logbox height */
 }
 .thinking-header {
   display: flex;
@@ -1858,7 +1858,7 @@ audio { display: block; }
   margin: 0;
 }
 .thinking-content {
-  max-height: 250px;
+  max-height: none;
   overflow-y: auto;
   padding: 8px;
   font-family: var(--font-mono);
@@ -1875,28 +1875,68 @@ audio { display: block; }
   margin: 4px 0;
   border-radius: 4px;
   animation: fadeIn 0.2s;
+  color: #111827; /* black text for contrast */
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
 }
 .thinking-event.thinking {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.15);
   border-left: 3px solid var(--accent-blue);
+  color: #111827;
 }
 .thinking-event.round {
-  background: rgba(139, 92, 246, 0.1);
+  background: rgba(139, 92, 246, 0.15);
   border-left: 3px solid var(--accent-violet);
+  color: #111827;
 }
 .thinking-event.tool {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(245, 158, 11, 0.15);
   border-left: 3px solid var(--accent-amber);
+  color: #111827;
 }
 .thinking-event .thinking-tool {
   margin-left: 16px;
   margin-top: 2px;
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Gold theme for thinking panel (matches logbox) */
+.thinking-panel.gold-theme {
+  background: var(--gold-100);  /* #fef3c7 - matches logbox */
+}
+
+.thinking-panel.gold-theme .thinking-event {
+  background: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid var(--accent-gold);
+  color: #111827;  /* Black text on gold */
+}
+
+.thinking-panel.gold-theme .thinking-event.round {
+  background: rgba(139, 92, 246, 0.1);
+  border-left-color: var(--accent-violet);
+  color: #111827;
+}
+
+.thinking-panel.gold-theme .thinking-event.tool {
+  background: rgba(245, 158, 11, 0.15);
+  border-left-color: var(--accent-amber);
+  color: #111827;
+}
+
+.thinking-panel.gold-theme .thinking-event.thinking {
+  background: rgba(59, 130, 246, 0.1);
+  border-left-color: var(--accent-blue);
+  color: #111827;
+}
+
+.thinking-panel.gold-theme .thinking-event .thinking-tool {
+  color: #374151;
 }
 
 /* Session Detail Modal */

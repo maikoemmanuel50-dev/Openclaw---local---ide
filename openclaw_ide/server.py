@@ -3016,6 +3016,15 @@ class IDEHandler(SimpleHTTPRequestHandler):
             # Fall through to agent loop with 7b model and DEEP_PLAN_PROMPT
             model = _CODER_MODEL_7B
             system_msg = DEEP_PLAN_PROMPT
+            
+            # Strip images from prompt in Deep Plan mode (7B coder is text-only)
+            if prompt:
+                import re
+                # Remove data URLs and markdown images
+                prompt = re.sub(r'<img[^>]+data:image[^>]+>', '[image omitted - Deep Plan mode is text-only]', prompt)
+                prompt = re.sub(r'!\[.*?\]\(data:image[^)]+\)', '[image omitted]', prompt)
+                # Remove base64 image data
+                prompt = re.sub(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', '[base64 image omitted]', prompt)
 
         # Build mode: 14b coder agent loop with full tool-calling
         if mode == "build":
@@ -3681,9 +3690,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
         """SSE stream of agent thinking events for a session."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-cache, no-transform")
         self.send_header("Connection", "keep-alive")
         self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
         
         # Track position in trace file
