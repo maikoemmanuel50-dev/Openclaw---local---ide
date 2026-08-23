@@ -28,20 +28,54 @@ DEFAULT_WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE_ROOT = Path(DEFAULT_WORKSPACE).resolve()
 IDE_ROOT = (WORKSPACE_ROOT).resolve()
 
+# ── OpenClaw CLI Shim Path (configurable via env) ──
+OPENCLAW_SHIM = os.environ.get("AFRICA_CLAW_SHIM") or r"C:\Users\HP\AppData\Roaming\npm\openclaw.cmd"
+
 # ── Project Configuration ──
 PROJECT_CONFIG = {}
 RENDER_ROOT = Path(".")
 
 def load_project_config():
-    """Load project.json from IDE root. Sets RENDER_ROOT and PROJECT_CONFIG."""
+    """Load project.json from IDE root or env-specified workspace. Sets RENDER_ROOT and PROJECT_CONFIG.
+    
+    Priority: AFRICA_WORKSPACE env var -> project.json in IDE_ROOT -> auto-discover renders/
+    """
     global PROJECT_CONFIG, RENDER_ROOT
-    config_path = IDE_ROOT / "project.json"
-    if config_path.exists():
+    
+    # Priority 1: AFRICA_WORKSPACE environment variable
+    env_root = os.environ.get("AFRICA_WORKSPACE")
+    config_path = None
+    
+    if env_root:
+        config_path = Path(env_root) / "project.json"
+    else:
+        # Priority 2: project.json in IDE root
+        config_path = IDE_ROOT / "project.json"
+    
+    if config_path and config_path.exists():
         with open(config_path, "r", encoding="utf-8") as f:
             PROJECT_CONFIG = json.load(f)
-        RENDER_ROOT = Path(PROJECT_CONFIG.get("renderRoot", ".")).resolve()
+        render_root = PROJECT_CONFIG.get("renderRoot", ".")
+        # Handle relative paths from config file location
+        if not os.path.isabs(render_root):
+            RENDER_ROOT = (config_path.parent / render_root).resolve()
+        else:
+            RENDER_ROOT = Path(render_root).resolve()
     else:
-        # Fallback: scan for render dirs in workspace
+        # Priority 3: Auto-discover from workspace
+        PROJECT_CONFIG = {
+            "name": "OpenClaw Project",
+            "episode": "",
+            "renderRoot": str(WORKSPACE_ROOT / "renders"),
+            "scriptsRoot": str(WORKSPACE_ROOT / "scripts"),
+            "blenderPath": r"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe",
+            "renderScripts": {},
+            "delivery": {"resolution": "1080p", "targetFps": 24},
+            "gates": {"4kHold": True, "gpuOneMax": True, "blenderOnly": "5.1.2"},
+            "tools": {"canva": {"account": ""}, "blender": {"port": 9876}, "resolve": {"port": 49632}},
+            "logFiles": [],
+            "scenes": []
+        }
         RENDER_ROOT = WORKSPACE_ROOT / "renders"
     return PROJECT_CONFIG
 
@@ -95,8 +129,8 @@ COPYRIGHT_TEXT_ONLY_NAMES = [
 
 # Clearance replacements from CLEARANCE_REPLACEMENTS.md
 COPYRIGHT_REPLACEMENTS = {
-    "netflix": "s10_africa_wordmark_endcard (AFRICA wordmark only)",
-    "safaricom": "generic telecom label or inf_s04_kenya_4g_device_bars",
+    "netflix": "project wordmark endcard (project wordmark only)",
+    "safaricom": "generic telecom label or project device indicator",
     "microsoft": "stylized non-trademarked icon (assets/icons/icon_microsoft.svg)",
     "visa": "stylized non-trademarked icon (assets/icons/icon_visa.svg)",
     "un logo": "UN text-only overlay, no emblem art",
@@ -475,7 +509,7 @@ SYSTEM_PROMPT = (
     "(4K 35-45 Mbps gated), Rec. 709, audio 48kHz AAC-LC 320-384k stereo, loudness -14 LUFS, true peak <= -1 dBTP, "
     "title-safe 80%, action-safe 90%. Verify against them before calling anything 'done'. "
     "Provide actionable, concrete code, commands, or answers. "
-    "Do NOT assume the project is Africa Season 1 unless the user explicitly says so. "
+    "Do NOT assume a specific project unless the user explicitly says so. "
     "You can help with ANY video production project, creative brainstorming, or general knowledge questions."
 )
 
@@ -607,7 +641,6 @@ LEGACY_GUIDES = [
         "content": (
             "### Production & Delivery Locks\n\n"
             "- **4K Status:** Strict HOLD until 1080p master clears creative review.\n"
-            "- **Yellow Ball Rule:** Ball identity is always `#FFD54F`. Faceless charcoal torso.\n"
             "- **VO Stem:** Real voice only; placeholder used for pacing.\n"
             "- **Runtime Target:** Exactly 7:00 @ 24fps."
         )
@@ -1321,19 +1354,20 @@ def escalation_openclaw(task_text, timeout=30):
     if not task_text:
         return {"ok": False, "error": "Empty escalation task"}
     
-    # Resolve the npm openclaw shim; fall back to name only.
-    for cand in (r"C:\Users\HP\AppData\Roaming\npm\openclaw.cmd", "openclaw"):
-        if os.path.isfile(cand):
-            shim = cand
-            break
-    else:
-        shim = "openclaw"
+    # Use configurable shim path (set at module load from AFRICA_CLAW_SHIM env var)
+    shim = OPENCLAW_SHIM
+    if not os.path.isfile(shim):
+        shim = "openclaw"  # fallback to PATH lookup
         
-    cmd = [shim, "agent", "--json", "--agent", "main", "-m", task_text]
+    # Sanitize task_text to prevent shell injection (shell=False, but defense in depth)
+    # Remove shell metacharacters that could be interpreted if shell=True somehow gets used
+    safe_task = re.sub(r'[&|^%<>]', '', task_text)
+    
+    cmd = [shim, "agent", "--json", "--agent", "main", "-m", safe_task]
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout,
-            shell=True,
+            shell=False,  # SECURITY: shell=False prevents command injection
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) or 0,
         )
         raw = proc.stdout.strip() or proc.stderr[-2000:].strip()
@@ -1390,6 +1424,7 @@ def direct_openclaw_chat(prompt, session=None, timeout=10):
 
 
 # Tool schema exposed to the model via Ollama function calling.
+# Each tool has a "category" for AI reasoning about tool selection.
 AGENT_TOOLS = [
     {
         "type": "function",
@@ -1397,20 +1432,23 @@ AGENT_TOOLS = [
             "name": "production_status",
             "description": "Get live production status: per-scene render frames, Blender activity, ready clips, power.",
             "parameters": {"type": "object", "properties": {}},
+            "category": "status",
         },
     },
     {
         "type": "function",
         "function": {
             "name": "read_log",
-            "description": "Read the tail of a production log. logs: wait_hq_assemble_log.txt, sasa_hq_rerender_log.txt, PRODUCTION_STATUS.md, STATUS_LIVE_DELIVERY.txt.",
+            "description": "Read the tail of a production log. Logs: project config logFiles + PRODUCTION_STATUS.md, STATUS_LIVE_DELIVERY.txt, STATUS_POWER_CHECKPOINT.txt, arch_comm_iv_lock_log.txt.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "log": {"type": "string", "description": "Log filename"},
                     "lines": {"type": "integer", "description": "Number of tail lines"},
                 },
+                "required": ["log"],
             },
+            "category": "diagnostics",
         },
     },
     {
@@ -1430,6 +1468,7 @@ AGENT_TOOLS = [
                 },
                 "required": ["action"],
             },
+            "category": "execution",
         },
     },
     {
@@ -1443,6 +1482,7 @@ AGENT_TOOLS = [
                 "properties": {"alias": {"type": "string", "enum": [k for k, _ in ALLOWED_SHELL_PATTERNS]}},
                 "required": ["alias"],
             },
+            "category": "diagnostics",
         },
     },
     {
@@ -1458,6 +1498,7 @@ AGENT_TOOLS = [
                 },
                 "required": ["image_path"],
             },
+            "category": "visual_qc",
         },
     },
     {
@@ -1472,18 +1513,20 @@ AGENT_TOOLS = [
                 },
                 "required": ["text"],
             },
+            "category": "compliance",
         },
     },
     {
         "type": "function",
         "function": {
-"name": "escalate_openclaw",
+            "name": "escalate_openclaw",
             "description": "Delegate a complex task to the OpenClaw gateway agent (port 18789). Use for multi-step cross-app work, Blender MCP scripting, DaVinci Resolve, or Canva deliverables.",
             "parameters": {
                 "type": "object",
                 "properties": {"task": {"type": "string", "description": "Precise task description for the gateway agent"}},
                 "required": ["task"],
             },
+            "category": "complex_tasks",
         },
     },
     {
@@ -1498,6 +1541,7 @@ AGENT_TOOLS = [
                 },
                 "required": ["topic"],
             },
+            "category": "creative",
         },
     },
 ]
@@ -1738,31 +1782,28 @@ def _creative_prompt(prompt):
     low = " ".join(prompt.lower().split())
     if not low or len(low) > 300:
         return False
-    # Action requests — NEVER fast-path these
-    ACTION_MARKERS = (
-        "create a", "build a", "design a", "make a", "assemble",
-        "render scene", "render the", "render mp4", "render now",
-        "write ", "fix ", "set ", "change ", "add ", "remove ",
-        "delete", "install", "configure", "setup", "deploy",
-        "start ", "stop ", "run ", "execute", "launch",
-        "save ", "export ", "import ", "copy ", "move ", "rename ",
-        "do not", "don't", "ensure", "make sure",
-        # Production action words — these imply user wants execution
-        "generate", "develop", "produce", "animate", "film", "video",
-        "create", "build", "design", "make", "implement",
-        "construct", "fabricate", "compose", "draft", "author",
-        "prepare", "arrange", "organize", "establish",
+    # Production imperatives — NEVER fast-path these
+    PRODUCTION_IMPERATIVES = (
+        "render", "export", "deploy", "assemble", "compile", 
+        "build the", "create the", "make the", "generate the",
+        "execute", "run the", "start the", "build a", "create a",
+        "make a", "design a", "write the", "fix the",
     )
-    if any(m in low for m in ACTION_MARKERS):
+    if any(m in low for m in PRODUCTION_IMPERATIVES):
         return False
-    # Must be a question or brainstorming prompt
-    has_question = ("?" in low or low.startswith(("what", "how", "is ", "are ",
-                    "can ", "could ", "should ", "do you", "let's", "let us",
-                    "give ", "suggest ", "explain ", "describe ", "tell me")))
+    # Output signals — implies execution wanted
+    OUTPUT_SIGNALS = (
+        ".mp4", ".blend", ".png", ".jpg", "deliverable", "output", "render",
+    )
+    if any(s in low for s in OUTPUT_SIGNALS):
+        return False
+    # Must be question form + creative intent
+    has_question = ("?" in low or low.startswith(("what", "how", "can", "could", 
+                    "suggest", "brainstorm", "ideas", "concept", "plan for", "roadmap")))
     if not has_question:
         return False
-    hits = sum(1 for w in _CREATIVE_WORDS if w in low)
-    return hits >= 1
+    creative_hits = sum(1 for w in _CREATIVE_WORDS if w in low)
+    return creative_hits >= 1
 
 
 def _production_task(prompt):
@@ -1772,28 +1813,20 @@ def _production_task(prompt):
     if not low:
         return False
     
-    # Strong production signals — these always mean execution
+    # Must have imperative verb + production signal
+    IMPERATIVE_VERBS = (
+        "render", "export", "deploy", "assemble", "compile",
+        "build the", "create the", "make the", "generate the",
+        "execute", "run ", "start ", "build a", "create a",
+        "make a", "design a", "write ", "fix ",
+    )
     PRODUCTION_SIGNALS = (
-        "generate", "develop", "produce", "animate", "film", "video",
-        "create a", "build a", "design a", "make a",
-        "implement", "construct", "fabricate", "compose",
-        "render", "export", "deploy", "publish",
-        "assemble", "compile", "package", "bundle",
+        "render", "export", "deploy", "assemble", "compile", "package", "bundle",
+        ".mp4", ".blend", ".png", "deliverable", "output", "file",
     )
-    
-    # Check for production signals
-    if any(s in low for s in PRODUCTION_SIGNALS):
-        return True
-    
-    # Check for file/output references — implies user wants output
-    OUTPUT_SIGNALS = (
-        ".mp4", ".png", ".jpg", ".blend", ".py", ".js", ".html",
-        "output", "result", "deliverable", "file", "render",
-    )
-    if any(s in low for s in OUTPUT_SIGNALS):
-        return True
-    
-    return False
+    has_imperative = any(m in low for m in IMPERATIVE_VERBS)
+    has_output = any(s in low for s in PRODUCTION_SIGNALS)
+    return has_imperative and has_output
 
 
 def creative_fast_path_reply(prompt):
@@ -1809,7 +1842,7 @@ def creative_fast_path_reply(prompt):
                     "You are a creative production assistant. "
                     "Answer the user's question directly and helpfully. Be concise but thorough. "
                     "Help with series planning, brainstorming, scripting, and creative ideation "
-                    "for ANY project — not just Africa Season 1."
+                    "for ANY project."
                 )},
                 {"role": "user", "content": prompt},
             ],
@@ -2050,9 +2083,10 @@ def get_download_progress():
 
 
 def read_log_tail(log_name, line_count=30):
-    valid = {"wait_hq_assemble_log.txt", "sasa_hq_rerender_log.txt",
-             "PRODUCTION_STATUS.md", "STATUS_LIVE_DELIVERY.txt",
+    # Default log files + any from project config
+    valid = {"PRODUCTION_STATUS.md", "STATUS_LIVE_DELIVERY.txt",
              "STATUS_POWER_CHECKPOINT.txt", "arch_comm_iv_lock_log.txt"}
+    valid.update(PROJECT_CONFIG.get("logFiles", []))
     if log_name not in valid:
         return {"ok": False, "error": f"Unknown log: {log_name}", "available": sorted(valid)}
     target = WORKSPACE_ROOT / log_name
@@ -2093,7 +2127,7 @@ PLANNER_PROMPT = (
     "  keep it in the plan anyway — the executor will respect the gate and halt.\n"
     f"- run_action args: {{\"action\": \"one of: {', '.join(EXEC_ACTIONS)}\"}}.\n"
     f"- read_log args: {{\"log\": \"filename\", \"lines\": 40}}; allowed logs: "
-    f"wait_hq_assemble_log.txt, sasa_hq_rerender_log.txt, PRODUCTION_STATUS.md, "
+    f"project config logFiles + PRODUCTION_STATUS.md, "
     f"STATUS_LIVE_DELIVERY.txt, STATUS_POWER_CHECKPOINT.txt, arch_comm_iv_lock_log.txt.\n"
     f"- shell_probe args: {{\"alias\": \"one of: {', '.join(k for k, _ in ALLOWED_SHELL_PATTERNS)}\"}}.\n"
     "- production_status takes an empty args object {}.\n"
@@ -2546,14 +2580,14 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": str(e)}, 500)
 
     def handle_logs_tail(self, log_name, line_count=50):
-        valid_logs = {
-            "wait_hq_assemble_log.txt", "sasa_hq_rerender_log.txt",
-            "PRODUCTION_STATUS.md", "STATUS_LIVE_DELIVERY.txt",
-            "STATUS_POWER_CHECKPOINT.txt", "arch_comm_iv_lock_log.txt",
-            "render_log_phaseB_rerender.txt"
-        }
+        valid_logs = {"PRODUCTION_STATUS.md", "STATUS_LIVE_DELIVERY.txt",
+             "STATUS_POWER_CHECKPOINT.txt", "arch_comm_iv_lock_log.txt",
+             "render_log_phaseB_rerender.txt"}
+        valid_logs.update(PROJECT_CONFIG.get("logFiles", []))
         if log_name not in valid_logs:
-            log_name = "wait_hq_assemble_log.txt"
+            # Default to first available log file
+            default_log = PROJECT_CONFIG.get("logFiles", ["PRODUCTION_STATUS.md"])[0]
+            log_name = default_log
         
         target = WORKSPACE_ROOT / log_name
         if not target.exists():
@@ -2579,8 +2613,12 @@ class IDEHandler(SimpleHTTPRequestHandler):
             "ses_" + time.strftime("%H%M%S") + "_" + str(int(time.time() * 1000))[-5:]
         )
 
-        # Fast path: pure status/progress questions are answered from live
-        # server data in milliseconds — the LLM loop (40-120s/round) never runs.
+        if not prompt:
+            self._send_json({"error": "Empty prompt"}, 400)
+            return
+
+        # Fast path: pure status/progress questions answered from live server data
+        # Check this FIRST regardless of mode (except plan/openclaw which return early)
         if _status_only_prompt(prompt):
             fast_reply = status_fast_path_reply(prompt)
             if fast_reply:
@@ -2598,37 +2636,6 @@ class IDEHandler(SimpleHTTPRequestHandler):
                                  "session": session, "rounds": [],
                                  "fastpath": True})
                 return
-
-        # Production task detection: if the user wants execution (generate,
-        # create, build, etc.), route through the agent loop with tools —
-        # NOT the creative fast-path. This prevents chatbot-like behavior.
-        if _production_task(prompt):
-            print(f"[chat] production task detected: {prompt[:80]}", flush=True)
-            # Fall through to agent loop below — do NOT return here
-        elif _creative_prompt(prompt):
-            # Creative fast-path: planning/brainstorming questions answered
-            # directly via Ollama — bypasses the agent loop entirely.
-            print(f"[chat] creative fast-path matched: {prompt[:80]}", flush=True)
-            creative_reply = creative_fast_path_reply(prompt)
-            if creative_reply:
-                trace_agent({"event": "loop.fastpath", "session": session,
-                             "model": model, "prompt": prompt[:300]})
-                log_prompt({
-                    "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                    "route": "chat_creative_fastpath",
-                    "model": model,
-                    "session": session,
-                    "prompt": prompt[:4000],
-                    "has_reply": True,
-                })
-                self._send_json({"reply": creative_reply, "model": model,
-                                 "session": session, "rounds": [],
-                                 "fastpath": True})
-                return
-
-        if not prompt:
-            self._send_json({"error": "Empty prompt"}, 400)
-            return
 
         # Plan mode: fast VL model for brainstorming/planning — no tools, no agent loop
         if mode == "plan":
@@ -2663,6 +2670,32 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json(res)
             return
 
+        # Production task detection: if the user wants execution (render, export, deploy, etc.),
+        # route through the agent loop with tools — NOT the creative fast-path.
+        if _production_task(prompt):
+            print(f"[chat] production task detected: {prompt[:80]}", flush=True)
+            # Fall through to agent loop below — do NOT return here
+        elif _creative_prompt(prompt):
+            # Creative fast-path: planning/brainstorming questions answered
+            # directly via Ollama — bypasses the agent loop entirely.
+            print(f"[chat] creative fast-path matched: {prompt[:80]}", flush=True)
+            creative_reply = creative_fast_path_reply(prompt)
+            if creative_reply:
+                trace_agent({"event": "loop.fastpath", "session": session,
+                             "model": model, "prompt": prompt[:300]})
+                log_prompt({
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    "route": "chat_creative_fastpath",
+                    "model": model,
+                    "session": session,
+                    "prompt": prompt[:4000],
+                    "has_reply": True,
+                })
+                self._send_json({"reply": creative_reply, "model": model,
+                                 "session": session, "rounds": [],
+                                 "fastpath": True})
+                return
+
         # Agentic Execution: dispatches tools, probes, and escalations with live trajectory recording
         render_data = get_render_progress()
         battery_data = get_battery_info()
@@ -2676,7 +2709,6 @@ class IDEHandler(SimpleHTTPRequestHandler):
         dynamic_system = (
             f"{system_msg}\n\n"
             f"[LIVE SYSTEM CONTEXT]\n"
-            f"- Workspace: {WORKSPACE_ROOT}\n"
             f"- Blender Cycles: {'ACTIVE (Rendering ' + active_scene_name + ')' if render_data['blenderRunning'] else 'IDLE'}\n"
             f"- Active Scene Frames: {active_scene_frames}/{active_scene_target}\n"
             f"- Ready Clips: {render_data['readyCount']}/{render_data['totalScenes']}\n"
@@ -2686,7 +2718,16 @@ class IDEHandler(SimpleHTTPRequestHandler):
             f"You have tools. USE them to actually perform tasks: query status, read logs, run gated actions, "
             f"probe the system, and escalate to the OpenClaw gateway for complex multi-step work. "
             f"Never refuse purely for being a language model; act on the deliverable. "
-            f"Do NOT assume this is Africa Season 1 unless the user says so — you can work on ANY project.\n"
+            f"Do NOT assume a specific project unless the user says so — you can work on ANY project.\n"
+            f"\n- TOOL SELECTION STRATEGY (each tool has a category for reasoning):\n"
+            f"  1. STATUS QUESTIONS (\"how far\", \"progress\", \"status\") → production_status [category: status]\n"
+            f"  2. DEBUG/INVESTIGATE (\"check logs\", \"why failed\", \"diagnose\") → read_log, shell_probe [category: diagnostics]\n"
+            f"  3. VISUAL QC (\"check frame\", \"verify render\", \"look at\") → inspect_image [category: visual_qc]\n"
+            f"  4. COMPLIANCE (\"can I use X\", \"copyright\", \"brand\") → copyright_check [category: compliance]\n"
+            f"  5. EXECUTION (\"render\", \"export\", \"assemble\", \"deploy\") → run_action [category: execution]\n"
+            f"  6. COMPLEX MULTI-STEP (\"Blender MCP\", \"DaVinci\", \"Canva\", \"cross-app\") → escalate_openclaw [category: complex_tasks]\n"
+            f"  7. CREATIVE/PLANNING (\"brainstorm\", \"ideas\", \"plan\", \"roadmap\") → brainstorm [category: creative]\n"
+            f"  8. DEFAULT: If unsure, start with production_status to understand context\n"
             f"\n- For creative, planning, or general-knowledge questions (brainstorming, ideating, explaining, writing), "
             f"use the `brainstorm` tool directly — do NOT loop on ping_qwen or production_status for non-production tasks.\n"
             f"- IMPORTANT: `ping_qwen`, `qwen_chat`, `assemble_final`, `render_mp4` etc. are NOT direct tools. "
@@ -2780,6 +2821,15 @@ class IDEHandler(SimpleHTTPRequestHandler):
         blocked_streak = 0
         trace_agent({"event": "loop.start", "model": model, "session": session,
                      "prompt": str(messages[1].get("content", ""))[:300] if len(messages) > 1 else ""})
+        
+        # Planning-only mode: if user explicitly says "plan only", "do not execute", etc.,
+        # remove execution tools from available set for this session
+        user_prompt = str(messages[1].get("content", "")).lower() if len(messages) > 1 else ""
+        planning_only = any(w in user_prompt for w in (
+            "plan only", "do not execute", "hold execution", "just plan", 
+            "don't execute", "only plan", "no execution", "no execute",
+        ))
+        
         for round_i in range(max_rounds):
             # Wall-clock guard: stop when budget spent, even with rounds left
             if time.time() - loop_start > wall_clock_limit:
@@ -2797,6 +2847,12 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 t for t in AGENT_TOOLS
                 if not (t.get("function", {}).get("name") == "production_status" and "production_status" in all_tools_called)
             ]
+            
+            # Planning-only: remove execution tools
+            if planning_only:
+                execution_tools = {"run_action", "escalate_openclaw"}
+                filtered_tools = [t for t in filtered_tools 
+                                 if t.get("function", {}).get("name") not in execution_tools]
 
             ollama_payload = {
                 "model": model,
