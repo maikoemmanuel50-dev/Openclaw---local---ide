@@ -19,12 +19,50 @@
     "blenderOnly": "5.1.2"
   },
   "tools": {
-    "canva": {"account": ""},
-    "blender": {"port": 9876},
-    "resolve": {"port": 49632}
+    "canva": {
+      "account": ""
+    },
+    "blender": {
+      "port": 9876
+    },
+    "resolve": {
+      "port": 49632
+    }
   },
   "logFiles": [
     "production_log.txt"
   ],
-  "scenes": []
+  "scenes": [],
+  "plan": {
+    "version": 1,
+    "generated": "2026-08-23T08:29:29Z",
+    "model": "qwen2.5-coder:7b",
+    "phases": [
+      {
+        "id": 1,
+        "name": "Pre-Production",
+        "days": 5,
+        "tasks": [
+          {
+            "id": "1.1",
+            "name": "Concept Brief",
+            "depends_on": [
+              "kickoff"
+            ],
+            "deliverable": "docs/concept.md",
+            "estimate_hrs": 4
+          }
+        ]
+      }
+    ],
+    "tasks": [],
+    "handoff": {},
+    "meta": {
+      "total_estimate_days": 5,
+      "gates": [
+        "4K HOLD"
+      ],
+      "handoff_ready": true
+    }
+  }
 }

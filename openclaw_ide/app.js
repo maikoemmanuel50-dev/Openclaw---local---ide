@@ -758,6 +758,20 @@ async function sendChat() {
     renderSessionRounds(sessionBubbleId, rounds);
     appendChatBubble("assistant", reply);
     playChime("reply");
+    
+    // Auto-save Deep Plan to project.json
+    if (currentEngineMode === "deep_plan" && data.reply) {
+      fetch("/api/plan/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_text: data.reply })
+      }).then(r => r.json()).then(result => {
+        if (result.ok) {
+          showToast("📋 Plan saved to project.json");
+          loadProjectPlan(); // Refresh task board
+        }
+      }).catch(() => {}); // Silent fail
+    }
   } catch (e) {
     clearInterval(pollTimer);
     console.warn("Chat error:", e);
@@ -1718,9 +1732,100 @@ async function loadReadinessPanel() {
   }
 }
 
+// ── Project Plan Board ──────────────────────────────────────────────
+async function loadProjectPlan() {
+  const container = document.getElementById("planboardContent");
+  if (!container) return;
+  try {
+    const res = await fetch("/api/files/read?path=project.json");
+    const data = await res.json();
+    const plan = data.content ? JSON.parse(data.content).plan : null;
+    const versionBadge = document.getElementById("planVersionBadge");
+    
+    if (!plan) {
+      container.innerHTML = `<div class="loading-state">No plan saved. Use <strong>Deep Plan</strong> mode to create one.</div>`;
+      versionBadge.innerText = "v—";
+      return;
+    }
+    
+    versionBadge.innerText = `v${plan.version || 1} · ${plan.generated ? new Date(plan.generated).toLocaleString() : "—"}`;
+    
+    let html = "";
+    (plan.phases || []).forEach((phase, pi) => {
+      html += `<div class="plan-phase"><h4>${phase.name} (${phase.days || "?"} days)</h4>`;
+      (phase.tasks || []).forEach((task, ti) => {
+        const deps = task.depends_on ? task.depends_on.join(", ") : "—";
+        html += `
+          <div class="plan-task" data-task-id="${task.id}">
+            <input type="checkbox" class="task-check" ${task.done ? "checked" : ""} onchange="toggleTask('${task.id}', this.checked)">
+            <div class="task-info">
+              <div class="task-name">${task.name}</div>
+              <div class="task-meta">
+                <span class="task-deliverable">📄 ${task.deliverable || "—"}</span>
+                <span class="task-estimate">⏱ ${task.estimate_hrs || "?"}h</span>
+                <span class="task-deps">🔗 ${deps}</span>
+              </div>
+            </div>`;
+      });
+      html += `</div>`;
+    });
+    
+    container.innerHTML = html || `<div class="loading-state">No phases in plan</div>`;
+    
+    // Enable promote button if plan has handoff_ready
+    const promoteBtn = document.getElementById("btnPromoteMission");
+    if (promoteBtn) promoteBtn.disabled = !plan.handoff_ready;
+  } catch (e) {
+    container.innerHTML = `<div class="loading-state error">Failed to load plan: ${e.message}</div>`;
+  }
+}
+
+async function toggleTask(taskId, done) {
+  try {
+    const res = await fetch("/api/files/read?path=project.json");
+    const data = await res.json();
+    const config = JSON.parse(data.content);
+    let found = false;
+    (config.plan?.phases || []).forEach(p => {
+      (p.tasks || []).forEach(t => { if (t.id === taskId) { t.done = done; found = true; } });
+    });
+    if (found) {
+      await fetch("/api/files/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: "project.json", content: JSON.stringify(config, null, 2) })
+      });
+      showToast(done ? "✅ Task completed" : "↩️ Task reopened");
+    }
+  } catch (e) {
+    showToast("Failed to update task: " + e.message);
+  }
+}
+
+async function promotePlanToMission() {
+  const res = await fetch("/api/files/read?path=project.json");
+  const data = await res.json();
+  const plan = data.content ? JSON.parse(data.content).plan : null;
+  if (!plan || !plan.handoff_ready) {
+    showToast("Plan not ready for mission promotion");
+    return;
+  }
+  // Send handoff JSON to /api/mission
+  const missionText = `Execute plan: ${JSON.stringify(plan.handoff)}`;
+  fetch("/api/mission", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mission: missionText })
+  }).then(r => r.json()).then(result => {
+    if (result.error) showToast("Mission error: " + result.error);
+    else showToast("🚀 Mission started (" + result.planCount + " steps)");
+  });
+}
+
 // Add to DOMContentLoaded init
 document.addEventListener("DOMContentLoaded", () => {
   // ... existing init code ...
   loadReadinessPanel();
+  loadProjectPlan();
   setInterval(loadReadinessPanel, 8000);
 });
