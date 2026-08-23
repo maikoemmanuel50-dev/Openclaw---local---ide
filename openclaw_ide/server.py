@@ -2418,6 +2418,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 "port8765": is_port_open(8765),
                 "blenderRunning": get_native_blender_pid() is not None,
             })
+        elif path == "/api/readiness":
+            self._send_json(self.get_readiness())
         else:
             super().do_GET()
 
@@ -2511,6 +2513,99 @@ class IDEHandler(SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
         self.wfile.write(data)
+
+    def handle_api_status(self):
+        _now = time.time()
+        if _STATUS_CACHE["ts"] and _now - _STATUS_CACHE["ts"] < 2.0:
+            self._send_json(_STATUS_CACHE["data"])
+            return
+        ollama_status = ping_ollama()
+        battery = get_battery_info()
+        render_prog = get_render_progress()
+        crestodian = get_crestodian_info()
+        download = get_download_progress()
+        active_model = resolve_default_model()
+        vision_ok = vl_ready()
+        gateway_reachable = is_port_open(18789)
+
+        status = {
+            "workspace": str(WORKSPACE_ROOT),
+            "ollama": ollama_status,
+            "defaultModel": DEFAULT_MODEL,
+            "activeModel": active_model,
+            "modelRouting": {
+                "general": _CODER_MODEL,
+                "vision": _VL_MODEL,
+                "policy": "general agentic tasks use the 14b; visual tasks route to the 7b via /api/vision and inspect_image",
+            },
+            "vision": {
+                "model": _VL_MODEL,
+                "active": vision_ok,
+                "ready": vision_ok,
+            },
+            "download": download,
+            "battery": battery,
+            "render": render_prog,
+            "gateway": {
+                "port": 18789,
+                "reachable": gateway_reachable,
+                "checked_at": time.strftime("%Y-%m-%dT%H:%M:%S")
+            },
+            "openclaw": {
+                "installed": True,
+                "version": "2026.7.1-2",
+                "rules": "AGENTS.md active"
+            },
+            "crestodian": crestodian,
+            "agent": {
+                "executor": True,
+                "actions": list(EXEC_ACTIONS.keys()),
+                "shellProbes": [k for k, _ in ALLOWED_SHELL_PATTERNS],
+                "vision": vision_ok,
+                "escalation": "openclaw gateway (port 18789)",
+                "mission": "analyze → rank → sequential execute (/api/mission)",
+                "gates": {"oneGpuJob": True, "fourKHold": True, "cpuWhileGpu": True}
+            },
+            "tools": {
+                "composio": {"status": "Ready & Authenticated", "auth": True},
+                "canva": {"status": "Active (canva_airway-sasin)", "auth": True},
+                "blender_mcp": {"status": "Configured (5.1.2)", "port": 9876},
+                "resolve_mcp": {"status": "Bridge Configured", "port": 49632},
+                "crestodian": {"status": "Enforced & Attested", "attestations": crestodian.get("attestationsCount", 0)}
+            }
+        }
+        _STATUS_CACHE["ts"] = _now
+        _STATUS_CACHE["data"] = status
+        self._send_json(status)
+
+    def get_readiness(self):
+        """Aggregate all health signals into a single readiness assessment."""
+        status = get_render_progress()
+        battery = get_battery_info()
+        ollama = ping_ollama()
+        gateway_ok = is_port_open(18789)
+        power = get_power_state()
+        disk = shutil.disk_usage("C:\\")
+        
+        checks = {
+            "ollama": {"ok": ollama.get("online"), "detail": f"{len(ollama.get('models', []))} models available"},
+            "gateway": {"ok": gateway_ok, "port": 18789},
+            "blender": {"ok": not status.get("blenderRunning") or status.get("readyCount", 0) == status.get("totalScenes", 0), 
+                        "detail": f"{status.get('readyCount', 0)}/{status.get('totalScenes', 0)} scenes ready"},
+            "power": {"ok": battery.get("percent", 0) > 20 or "AC" in battery.get("status", ""), 
+                      "detail": f"{battery.get('percent')}% ({battery.get('status')})"},
+            "disk": {"ok": disk.free > 10 * 1024**3,  # 10GB minimum
+                     "detail": f"{round(disk.free / 1024**3, 1)} GB free"},
+            "sleep": {"ok": power.get("sleep", {}).get("ac") == "never" and power.get("hibernate", {}).get("ac") == "never",
+                      "detail": "Sleep/hibernate disabled" if power.get("sleep", {}).get("ac") == "never" else "Sleep active - may interrupt renders"}
+        }
+        
+        all_ok = all(c["ok"] for c in checks.values())
+        return {
+            "overall": "ready" if all_ok else "degraded",
+            "checks": checks,
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")
+        }
 
     def handle_api_status(self):
         _now = time.time()
