@@ -627,6 +627,7 @@ function setAgentEngineMode(mode, showFeedback = true) {
   localStorage.setItem("agentEngineMode", mode);
 
   const btnPlan = document.getElementById("modePlan");
+  const btnDeepPlan = document.getElementById("modeDeepPlan");
   const btnBuild = document.getElementById("modeBuild");
   const btnVision = document.getElementById("modeVision");
   const avatar = document.getElementById("agentAvatar");
@@ -634,6 +635,7 @@ function setAgentEngineMode(mode, showFeedback = true) {
   const subtitle = document.getElementById("agentSubtitle");
 
   btnPlan?.classList.toggle("active", mode === "plan");
+  btnDeepPlan?.classList.toggle("active", mode === "deep_plan");
   btnBuild?.classList.toggle("active", mode === "build");
   btnVision?.classList.toggle("active", mode === "vision");
 
@@ -643,6 +645,12 @@ function setAgentEngineMode(mode, showFeedback = true) {
     if (subtitle) subtitle.innerText = "Fast brainstorming & planning • VL 7B";
     if (elChatInput) elChatInput.placeholder = "Brainstorm, plan, explain... (fast responses)";
     if (showFeedback) showToast("📝 Plan Mode Active (VL 7B — fast)", 2000);
+  } else if (mode === "deep_plan") {
+    if (avatar) avatar.innerText = "📋";
+    if (title) title.innerText = "Deep Plan Mode";
+    if (subtitle) subtitle.innerText = "Researched planning with tools • 7B Coder";
+    if (elChatInput) elChatInput.placeholder = "Research-backed planning with production context...";
+    if (showFeedback) showToast("📋 Deep Plan Mode Active (7B Coder — researched)", 2000);
   } else if (mode === "build") {
     if (avatar) avatar.innerText = "🔧";
     if (title) title.innerText = "Build Mode";

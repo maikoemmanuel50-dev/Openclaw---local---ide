@@ -83,7 +83,8 @@ load_project_config()
 
 OLLAMA_HOST = "http://127.0.0.1:11434"
 _VL_MODEL = "qwen2.5vl:7b"
-_CODER_MODEL = "qwen2.5-coder:14b"  # 14b for agentic Build mode; 7b available later
+_CODER_MODEL = "qwen2.5-coder:14b"  # 14b for agentic Build mode
+_CODER_MODEL_7B = "qwen2.5-coder:7b"  # 7b for Deep Plan mode (fast, tool-capable)
 
 # ── Copyright Guardrail (YouTube policy 2026 + production clearance) ──
 # Machine-scored substring rules. Verdicts: CLEAR / WARN / BLOCK.
@@ -2138,6 +2139,54 @@ PLANNER_PROMPT = (
 )
 
 
+DEEP_PLAN_PROMPT = (
+    "You are a production planning specialist. Create comprehensive, actionable plans "
+    "for video production projects using available tools to gather context.\n\n"
+    "OUTPUT FORMAT:\n"
+    "1. Structured Markdown with phases, tasks, dependencies, estimates\n"
+    "2. A JSON block at the end for programmatic handoff (mission mode, CI/CD)\n\n"
+    "TOOLS AVAILABLE (use to gather context before planning):\n"
+    "- production_status: live render progress, Blender state, power\n"
+    "- read_log: production logs (config logFiles + PRODUCTION_STATUS.md, STATUS_LIVE_DELIVERY.txt, etc.)\n"
+    "- shell_probe: read-only system probes (disk, blender process, ports)\n"
+    "- copyright_check: assess brand/stock/generated content risk\n"
+    "- brainstorm: creative ideation for concepts, scripts, series ideas\n\n"
+    "TOOLS NOT AVAILABLE (execution tools are filtered out):\n"
+    "- run_action, escalate_openclaw, inspect_image\n\n"
+    "PLANNING METHODOLOGY:\n"
+    "1. GATHER CONTEXT: call production_status, read_log, shell_probe to understand current state\n"
+    "2. DEFINE PHASES: Pre-Production, Production, Post-Production, Delivery\n"
+    "3. BREAK INTO TASKS: each with clear deliverable, dependencies, estimate (hrs/days)\n"
+    "4. IDENTIFY GATES: 4K HOLD, one GPU job max, CPU-while-GPU block\n"
+    "5. ESTIMATE EFFORT: hours per task, total days, critical path\n\n"
+    "GATE AWARENESS:\n"
+    "- 4K HOLD: no 4K renders until 1080p delivery complete\n"
+    "- ONE GPU JOB: never start second Blender render while one is active\n"
+    "- CPU-WHILE-GPU: no heavy ffmpeg assembly during active GPU render\n\n"
+    "OUTPUT EXAMPLE:\n"
+    "# Video Production Plan: Project Name\n"
+    "## Phase 1: Pre-Production (5 days)\n"
+    "- Task 1.1: Concept Brief [depends: kickoff] [deliverable: docs/concept.md] [estimate: 4h]\n"
+    "- Task 1.2: Script Outline [depends: 1.1] [deliverable: scripts/outline.md] [estimate: 6h]\n"
+    "## Phase 2: Production (10 days)\n"
+    "...\n\n"
+    "```json\n"
+    "{\n"
+    "  \"project\": \"Project Name\",\n"
+    "  \"phases\": [\n"
+    "    {\"id\": 1, \"name\": \"Pre-Production\", \"days\": 5, \"tasks\": [\n"
+    "      {\"id\": \"1.1\", \"name\": \"Concept Brief\", \"depends_on\": [\"kickoff\"], \"deliverable\": \"docs/concept.md\", \"estimate_hrs\": 4},\n"
+    "      {\"id\": \"1.2\", \"name\": \"Script Outline\", \"depends_on\": [\"1.1\"], \"deliverable\": \"scripts/outline.md\", \"estimate_hrs\": 6}\n"
+    "    ]}\n"
+    "  ],\n"
+    "  \"total_estimate_days\": 15,\n"
+    "  \"gates\": [\"4K HOLD\", \"one GPU job\"],\n"
+    "  \"handoff_ready\": true\n"
+    "}\n"
+    "```"
+)
+
+
 def plan_mission(mission_text, model=DEFAULT_MODEL):
     """Phase 1: analyze + rank a large prompt into ordered JSON steps.
 
@@ -2657,6 +2706,14 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 self._send_json({"reply": f"Plan mode error: {e}", "model": _VL_MODEL, "session": session, "ok": False})
             return
 
+        # Deep Plan mode: 7b coder with info tools for researched planning
+        if mode == "deep_plan":
+            # Warm up the 7b coder for planning with tools
+            warm_up_ollama(_CODER_MODEL_7B)
+            # Fall through to agent loop with 7b model and DEEP_PLAN_PROMPT
+            model = _CODER_MODEL_7B
+            system_msg = DEEP_PLAN_PROMPT
+
         # Build mode: 14b coder agent loop with full tool-calling
         if mode == "build":
             # Warm up the 14b coder for agentic tasks
@@ -2762,7 +2819,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         session = payload.get("session") or (
             "ses_" + time.strftime("%H%M%S") + "_" + str(int(time.time() * 1000))[-5:]
         )
-        reply = self._run_agent_loop(messages, model, payload, session=session)
+        reply = self._run_agent_loop(messages, model, payload, session=session, mode=mode)
 
         if not reply:
             eta = render_eta()
@@ -2804,7 +2861,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
             pass
 
     # NB: LLM chain continues tool_rounds up to max_rounds.
-    def _run_agent_loop(self, messages, model, payload, session=None):
+    def _run_agent_loop(self, messages, model, payload, session=None, mode=None):
         """Multi-round tool-calling loop against Ollama. Handles BOTH native
         function calling (`message.tool_calls`) and models that emit tool-call
         JSON inside `content` (e.g. qwen2.5-coder): <TOOLJSON>...</TOOLJSON>."""
@@ -2823,9 +2880,9 @@ class IDEHandler(SimpleHTTPRequestHandler):
                      "prompt": str(messages[1].get("content", ""))[:300] if len(messages) > 1 else ""})
         
         # Planning-only mode: if user explicitly says "plan only", "do not execute", etc.,
-        # remove execution tools from available set for this session
+        # OR if mode is "deep_plan", remove execution tools from available set
         user_prompt = str(messages[1].get("content", "")).lower() if len(messages) > 1 else ""
-        planning_only = any(w in user_prompt for w in (
+        planning_only = (mode == "deep_plan") or any(w in user_prompt for w in (
             "plan only", "do not execute", "hold execution", "just plan", 
             "don't execute", "only plan", "no execution", "no execute",
         ))
