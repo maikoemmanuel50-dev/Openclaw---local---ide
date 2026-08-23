@@ -2240,6 +2240,151 @@ def save_plan_to_project(plan_json):
     return {"ok": True, "plan": config["plan"]}
 
 
+# ─── Session Search Index (SQLite FTS5) ──────────────────────────────
+import sqlite3
+import threading
+import atexit
+
+INDEX_DB = (WORKSPACE_ROOT / ".session_index.db").resolve()
+_INDEX_LOCK = threading.Lock()
+_INDEX_INITIALIZED = False
+
+def _init_search_index():
+    """Create FTS5 virtual table for session search."""
+    global _INDEX_INITIALIZED
+    with _INDEX_LOCK:
+        if _INDEX_INITIALIZED:
+            return
+        conn = sqlite3.connect(INDEX_DB)
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS sessions_fts USING fts5(
+                session_id UNINDEXED,
+                timestamp UNINDEXED,
+                mode UNINDEXED,
+                model UNINDEXED,
+                prompt,
+                reply,
+                tools_used,
+                tools_detail,
+                status UNINDEXED,
+                duration_s UNINDEXED,
+                has_plan_json UNINDEXED,
+                plan_version UNINDEXED,
+                tokenize='porter unicode61'
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS session_meta (
+                session_id TEXT PRIMARY KEY,
+                timestamp TEXT,
+                mode TEXT,
+                model TEXT,
+                prompt TEXT,
+                reply TEXT,
+                tools_used TEXT,
+                tools_detail TEXT,
+                status TEXT,
+                duration_s REAL,
+                has_plan_json INTEGER,
+                plan_version INTEGER,
+                raw_prompt TEXT,
+                raw_reply TEXT
+            )
+        """)
+        conn.commit()
+        conn.close()
+        _INDEX_INITIALIZED = True
+
+def _index_session(session_id, meta, trace_events):
+    """Index a completed session from prompt log + trace."""
+    _init_search_index()
+    
+    # Aggregate trace data
+    tools_used = []
+    tools_detail = []
+    rounds = 0
+    duration = 0
+    has_plan = False
+    plan_ver = 0
+    
+    for ev in trace_events:
+        if ev.get("event") == "round":
+            rounds += 1
+            if ev.get("model_text"):
+                # Check for plan JSON in model text
+                if "```json" in ev["model_text"] and "handoff_ready" in ev["model_text"]:
+                    has_plan = True
+        if ev.get("event") == "tool":
+            for tc in ev.get("tools_called", []):
+                name = tc.get("name")
+                if name and name not in tools_used:
+                    tools_used.append(name)
+                tools_detail.append({
+                    "name": name,
+                    "status": tc.get("status"),
+                    "summary": (tc.get("result_summary") or "")[:200]
+                })
+        if ev.get("event") == "loop.start":
+            duration = ev.get("elapsed_s", 0)
+        if ev.get("event") in ("loop.max_rounds", "loop.converged", "loop.term", "loop.wallclock"):
+            duration = ev.get("elapsed_s", duration)
+    
+    with _INDEX_LOCK:
+        conn = sqlite3.connect(INDEX_DB)
+        # FTS5 doesn't support UPSERT - delete then insert
+        conn.execute("DELETE FROM sessions_fts WHERE session_id = ?", (session_id,))
+        conn.execute("""
+            INSERT INTO sessions_fts(session_id, timestamp, mode, model, prompt, reply, tools_used, tools_detail, status, duration_s, has_plan_json, plan_version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            session_id, meta.get("ts"), meta.get("mode"), meta.get("model"),
+            meta.get("prompt", "")[:5000], meta.get("reply", "")[:5000],
+            ", ".join(tools_used), json.dumps(tools_detail),
+            meta.get("status", "completed"), duration, int(has_plan), plan_ver
+        ))
+        # Store full metadata for detail view (regular table supports UPSERT)
+        conn.execute("""
+            INSERT INTO session_meta(session_id, timestamp, mode, model, prompt, reply, tools_used, tools_detail, status, duration_s, has_plan_json, plan_version, raw_prompt, raw_reply)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET
+                timestamp=excluded.timestamp, mode=excluded.mode, model=excluded.model,
+                prompt=excluded.prompt, reply=excluded.reply, tools_used=excluded.tools_used,
+                tools_detail=excluded.tools_detail, status=excluded.status,
+                duration_s=excluded.duration_s, has_plan_json=excluded.has_plan_json,
+                plan_version=excluded.plan_version, raw_prompt=excluded.raw_prompt,
+                raw_reply=excluded.raw_reply
+        """, (
+            session_id, meta.get("ts"), meta.get("mode"), meta.get("model"),
+            meta.get("prompt"), meta.get("reply"),
+            ", ".join(tools_used), json.dumps(tools_detail),
+            meta.get("status", "completed"), duration, int(has_plan), plan_ver,
+            meta.get("prompt"), meta.get("reply")
+        ))
+        conn.commit()
+        conn.close()
+
+def _rebuild_index_from_logs():
+    """Full rebuild from .prompt_log.jsonl + .agent_trace.jsonl (run once at startup)."""
+    _init_search_index()
+    prompts = read_prompt_history(limit=10000)  # all
+    trace_by_session = {}
+    for ev in read_agent_trace(limit=50000):
+        sid = ev.get("session")
+        if sid:
+            trace_by_session.setdefault(sid, []).append(ev)
+    
+    for meta in prompts:
+        sid = meta.get("session")
+        if sid:
+            _index_session(sid, meta, trace_by_session.get(sid, []))
+    print(f"[search-index] Rebuilt: {len(prompts)} sessions indexed")
+
+# Start background indexer
+_indexer_thread = threading.Thread(target=_rebuild_index_from_logs, daemon=True)
+_indexer_thread.start()
+atexit.register(lambda: None)  # placeholder for cleanup
+
+
 def plan_mission(mission_text, model=DEFAULT_MODEL):
     """Phase 1: analyze + rank a large prompt into ordered JSON steps.
 
@@ -2473,6 +2618,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
             })
         elif path == "/api/readiness":
             self._send_json(self.get_readiness())
+        elif path == "/api/sessions/search":
+            self.handle_search_sessions(query)
+        elif path == "/api/sessions/detail":
+            self.handle_session_detail(query)
         else:
             super().do_GET()
 
@@ -2491,6 +2640,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self.handle_chat(payload)
         elif path == "/api/plan/save":
             self.handle_plan_save(payload)
+        elif path == "/api/sessions/search":
+            self.handle_search_sessions(payload)
         elif path == "/api/openclaw/direct":
             prompt = payload.get("prompt", "")
             session = payload.get("session", "")
@@ -3398,7 +3549,109 @@ class IDEHandler(SimpleHTTPRequestHandler):
         result = save_plan_to_project(plan_json)
         self._send_json(result)
 
-    def handle_agent_tools(self):
+    def handle_search_sessions(self, query):
+        """POST /api/sessions/search — full-text search with filters."""
+        try:
+            payload = json.loads(query.get("body", "{}"))
+        except Exception:
+            payload = {}
+        
+        q = payload.get("q", "").strip()
+        mode = payload.get("mode")
+        status = payload.get("status")
+        has_plan = payload.get("has_plan")
+        limit = min(int(payload.get("limit", 50)), 200)
+        offset = int(payload.get("offset", 0))
+        
+        _init_search_index()
+        conn = sqlite3.connect(INDEX_DB)
+        conn.row_factory = sqlite3.Row
+        
+        # Build FTS query
+        where = ["1=1"]
+        params = []
+        
+        if q:
+            where.append("sessions_fts MATCH ?")
+            params.append(q)
+        if mode:
+            where.append("mode = ?")
+            params.append(mode)
+        if status:
+            where.append("status = ?")
+            params.append(status)
+        if has_plan is not None:
+            where.append("has_plan_json = ?")
+            params.append(int(has_plan))
+        
+        sql = f"""
+            SELECT session_id, timestamp, mode, model, prompt, reply, tools_used, tools_detail, 
+                   status, duration_s, has_plan_json, plan_version,
+                   bm25(sessions_fts) as rank
+            FROM sessions_fts
+            WHERE {' AND '.join(where)}
+            ORDER BY rank
+            LIMIT ? OFFSET ?
+        """
+        params.extend([limit, offset])
+        
+        rows = conn.execute(sql, params).fetchall()
+        conn.close()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "session_id": row["session_id"],
+                "timestamp": row["timestamp"],
+                "mode": row["mode"],
+                "model": row["model"],
+                "prompt_preview": row["prompt"][:120] + ("…" if len(row["prompt"]) > 120 else ""),
+                "reply_preview": row["reply"][:120] + ("…" if len(row["reply"]) > 120 else ""),
+                "tools_used": row["tools_used"].split(", ") if row["tools_used"] else [],
+                "tools_detail": json.loads(row["tools_detail"]) if row["tools_detail"] else [],
+                "status": row["status"],
+                "duration_s": row["duration_s"],
+                "has_plan_json": bool(row["has_plan_json"]),
+                "plan_version": row["plan_version"],
+                "rank": round(row["rank"], 2)
+            })
+        
+        self._send_json({"results": results, "total": len(results), "query": q})
+
+    def handle_session_detail(self, query):
+        session_id = query.get("session_id", [""])[0]
+        if not session_id:
+            self._send_json({"error": "session_id required"}, 400)
+            return
+        
+        _init_search_index()
+        conn = sqlite3.connect(INDEX_DB)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM session_meta WHERE session_id = ?", (session_id,)).fetchone()
+        conn.close()
+        
+        if not row:
+            self._send_json({"error": "Session not found"}, 404)
+            return
+        
+        # Also fetch full trace for this session
+        trace = read_agent_trace(limit=1000, session=session_id)
+        
+        self._send_json({
+            "session_id": row["session_id"],
+            "timestamp": row["timestamp"],
+            "mode": row["mode"],
+            "model": row["model"],
+            "prompt": row["raw_prompt"],
+            "reply": row["raw_reply"],
+            "tools_used": row["tools_used"].split(", ") if row["tools_used"] else [],
+            "tools_detail": json.loads(row["tools_detail"]) if row["tools_detail"] else [],
+            "status": row["status"],
+            "duration_s": row["duration_s"],
+            "has_plan_json": bool(row["has_plan_json"]),
+            "plan_version": row["plan_version"],
+            "trace": trace
+        })
         self._send_json({
             "actions": list(EXEC_ACTIONS.keys()),
             "shellProbes": [k for k, _ in ALLOWED_SHELL_PATTERNS],

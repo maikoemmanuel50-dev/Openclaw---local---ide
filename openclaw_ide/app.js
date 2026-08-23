@@ -1829,3 +1829,177 @@ document.addEventListener("DOMContentLoaded", () => {
   loadProjectPlan();
   setInterval(loadReadinessPanel, 8000);
 });
+
+// ── Sessions Search & History ────────────────────────────────────────
+let sessionSearchState = {
+  query: "",
+  mode: "",
+  status: "",
+  hasPlan: false,
+  page: 0,
+  pageSize: 20,
+  total: 0
+};
+
+async function loadSessionsPage(append = false) {
+  const container = document.getElementById("sessionListContainer");
+  if (!append) {
+    container.innerHTML = `<div class="loading-state">Searching sessions...</div>`;
+  }
+  
+  try {
+    const body = {
+      q: sessionSearchState.query,
+      mode: sessionSearchState.mode,
+      status: sessionSearchState.status,
+      has_plan: sessionSearchState.hasPlan || null,
+      limit: sessionSearchState.pageSize,
+      offset: sessionSearchState.page * sessionSearchState.pageSize
+    };
+    
+    const res = await fetch("/api/sessions/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    
+    sessionSearchState.total = data.total || 0;
+    
+    if (!append) container.innerHTML = "";
+    
+    if (!data.results.length && sessionSearchState.page === 0) {
+      container.innerHTML = `<div class="loading-state">No sessions found${sessionSearchState.query ? ` for "${sessionSearchState.query}"` : ""}</div>`;
+      updateSessionPagination();
+      return;
+    }
+    
+    data.results.forEach(s => {
+      const item = document.createElement("div");
+      item.className = "session-item";
+      item.innerHTML = `
+        <div class="session-header">
+          <span class="session-mode">${s.mode}</span>
+          <span class="session-time">${s.timestamp ? new Date(s.timestamp).toLocaleString() : "—"}</span>
+          <span class="session-status ${s.status}">${s.status}</span>
+          ${s.has_plan_json ? '<span class="session-plan-badge">📋 Plan</span>' : ''}
+        </div>
+        <div class="session-prompt" title="${s.prompt_preview}">${s.prompt_preview}</div>
+        <div class="session-meta">
+          <span>Model: ${s.model}</span>
+          <span>Tools: ${s.tools_used.join(", ") || "—"}</span>
+          <span>Duration: ${s.duration_s ? s.duration_s.toFixed(1) + "s" : "—"}</span>
+        </div>
+        <div class="session-tools">
+          ${s.tools_detail.map(t => `<span class="tool-tag ${t.status}">${t.name} (${t.status})</span>`).join("")}
+        </div>
+      `;
+      item.onclick = () => openSessionDetail(s.session_id);
+      container.appendChild(item);
+    });
+    
+    updateSessionPagination();
+  } catch (e) {
+    container.innerHTML = `<div class="loading-state error">Search failed: ${e.message}</div>`;
+  }
+}
+
+function updateSessionPagination() {
+  const prev = document.getElementById("sessionPrev");
+  const next = document.getElementById("sessionNext");
+  const info = document.getElementById("sessionPageInfo");
+  const totalPages = Math.ceil(sessionSearchState.total / sessionSearchState.pageSize);
+  
+  prev.disabled = sessionSearchState.page === 0;
+  next.disabled = sessionSearchState.page >= totalPages - 1;
+  info.innerText = `Page ${sessionSearchState.page + 1} / ${totalPages || 1} (${sessionSearchState.total} total)`;
+}
+
+document.getElementById("sessionSearch")?.addEventListener("input", debounce(() => {
+  sessionSearchState.query = document.getElementById("sessionSearch").value;
+  sessionSearchState.page = 0;
+  loadSessionsPage();
+}, 300));
+
+["sessionModeFilter", "sessionStatusFilter", "sessionHasPlanFilter"].forEach(id => {
+  document.getElementById(id)?.addEventListener("change", () => {
+    sessionSearchState[id.replace("session", "").replace("Filter", "").toLowerCase()] = document.getElementById(id).value || (document.getElementById(id).checked ? true : false);
+    sessionSearchState.page = 0;
+    loadSessionsPage();
+  });
+});
+
+document.getElementById("sessionPrev")?.addEventListener("click", () => {
+  if (sessionSearchState.page > 0) {
+    sessionSearchState.page--;
+    loadSessionsPage();
+  }
+});
+document.getElementById("sessionNext")?.addEventListener("click", () => {
+  if ((sessionSearchState.page + 1) * sessionSearchState.pageSize < sessionSearchState.total) {
+    sessionSearchState.page++;
+    loadSessionsPage();
+  }
+});
+
+async function openSessionDetail(sessionId) {
+  try {
+    const res = await fetch(`/api/sessions/detail?session_id=${encodeURIComponent(sessionId)}`);
+    const data = await res.json();
+    
+    // Open in modal
+    const modal = document.createElement("div");
+    modal.className = "session-detail-modal";
+    modal.innerHTML = `
+      <div class="modal-overlay" onclick="this.parentElement.remove()"></div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Session: ${sessionId}</h3>
+          <button class="icon-btn" onclick="this.closest('.session-detail-modal').remove()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="detail-section">
+            <h4>Prompt</h4>
+            <pre>${esc(data.prompt)}</pre>
+          </div>
+          <div class="detail-section">
+            <h4>Reply</h4>
+            <pre>${esc(data.reply)}</pre>
+          </div>
+          <div class="detail-section">
+            <h4>Trace (${data.trace.length} events)</h4>
+            <div class="trace-list">
+              ${data.trace.map(t => `
+                <div class="trace-item ${t.status || ''}">
+                  <span class="trace-icon">${t.event === 'round' ? '🧠' : t.event === 'tool' ? '🔧' : '•'}</span>
+                  <span>${t.event}${t.round !== undefined ? ` R${t.round + 1}` : ''}</span>
+                  ${t.model_text ? `<span class="trace-thought">${esc(t.model_text.slice(0, 200))}</span>` : ''}
+                  ${t.tools_called ? t.tools_called.map(tc => `<span class="trace-tool">${tc.name}(${JSON.stringify(tc.args).slice(0,60)})</span>`).join("") : ''}
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  } catch (e) {
+    showToast("Failed to load session detail: " + e.message);
+  }
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+// Add to DOMContentLoaded init
+document.addEventListener("DOMContentLoaded", () => {
+  // ... existing init code ...
+  loadReadinessPanel();
+  loadProjectPlan();
+  setInterval(loadReadinessPanel, 8000);
+});
