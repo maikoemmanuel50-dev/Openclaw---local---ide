@@ -2622,6 +2622,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self.handle_search_sessions(query)
         elif path == "/api/sessions/detail":
             self.handle_session_detail(query)
+        elif path == "/api/agent/stream":
+            self.handle_agent_stream(query.get("session", [None])[0])
         else:
             super().do_GET()
 
@@ -3674,6 +3676,48 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 "maxSteps": 10,
             },
         })
+
+    def handle_agent_stream(self, session):
+        """SSE stream of agent thinking events for a session."""
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        
+        # Track position in trace file
+        last_pos = 0
+        trace_path = AGENT_TRACE_PATH
+        
+        try:
+            while True:
+                if trace_path.exists():
+                    with open(trace_path, "r", encoding="utf-8") as f:
+                        f.seek(last_pos)
+                        new_lines = f.readlines()
+                        last_pos = f.tell()
+                    
+                    for line in new_lines:
+                        try:
+                            event = json.loads(line.strip())
+                            if event.get("session") == session:
+                                # Filter to thinking/tool events
+                                if event.get("event") in ("round", "tool", "thinking", "loop.start"):
+                                    data = json.dumps({
+                                        "type": event["event"],
+                                        "round": event.get("round"),
+                                        "model_text": event.get("model_text", "")[:500],
+                                        "tools": event.get("tools_called", []),
+                                        "ts": event.get("ts")
+                                    })
+                                    self.wfile.write(f"data: {data}\n\n".encode())
+                                    self.wfile.flush()
+                        except Exception:
+                            pass
+                time.sleep(0.5)  # Poll trace file every 500ms
+        except (ConnectionError, BrokenPipeError):
+            pass  # Client disconnected
 
     def handle_openclaw_exec(self, payload):
         command = payload.get("command", "")
