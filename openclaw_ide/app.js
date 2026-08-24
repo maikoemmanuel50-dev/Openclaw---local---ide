@@ -40,9 +40,11 @@ document.addEventListener("DOMContentLoaded", () => {
   setupTerminal();
   setupLogs();
   initAgentEngineMode();
+  initBottomPanelView();
 
   // Load initial data
   loadFileTree();
+  gitRefresh();
   if (activeFilePath) {
     loadFile(activeFilePath);
   }
@@ -193,16 +195,16 @@ async function loadFile(relPath) {
     elActiveFilePath.innerText = relPath;
     const res = await fetch(`/api/files/read?path=${encodeURIComponent(relPath)}`);
     const data = await res.json();
-    if (data.error) {
-      elCodeEditor.value = `// Error reading file: ${data.error}`;
-    } else {
-      elCodeEditor.value = data.content || "";
+    var content = data.error ? `// Error reading file: ${data.error}` : (data.content || "");
+    if (window.monacoEditor) {
+      var ext = relPath.split('.').pop().toLowerCase();
+      var langMap = { js:'javascript', ts:'typescript', py:'python', html:'html', css:'css', json:'json', md:'markdown', xml:'xml', yaml:'yaml', yml:'yaml', sh:'shell', ps1:'powershell', bat:'bat', cpp:'cpp', c:'c', h:'c', java:'java', go:'go', rs:'rust', rb:'ruby', php:'php', swift:'swift', kt:'kotlin' };
+      try { monaco.editor.setModelLanguage(window.monacoEditor.getModel(), langMap[ext] || 'plaintext'); } catch(e) {}
+      window.monacoEditor.setValue(content);
     }
-    if (isMarkdownPreview) {
-      renderMarkdownPreview();
-    }
+    if (isMarkdownPreview) { renderMarkdownPreview(); }
   } catch (e) {
-    elCodeEditor.value = `// Error: ${e.message}`;
+    if (window.monacoEditor) window.monacoEditor.setValue(`// Error: ${e.message}`);
   }
 }
 
@@ -230,10 +232,9 @@ function closeTab(path, e) {
     activeFilePath = openFiles.length > 0 ? openFiles[openFiles.length - 1] : null;
   }
   renderTabs();
-  if (activeFilePath) {
-    loadFile(activeFilePath);
-  } else {
-    elCodeEditor.value = "";
+  if (activeFilePath) { loadFile(activeFilePath); }
+  else {
+    if (window.monacoEditor) window.monacoEditor.setValue("");
     elActiveFilePath.innerText = "No file open";
   }
 }
@@ -252,40 +253,63 @@ document.addEventListener("keydown", async (e) => {
 
 async function saveCurrentFile() {
   try {
-    const content = elCodeEditor.value;
+    var content = window.monacoEditor ? window.monacoEditor.getValue() : (elCodeEditor ? elCodeEditor.value : "");
     const res = await fetch("/api/files/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: activeFilePath, content })
     });
     const data = await res.json();
-    if (data.ok) {
-      showToast(`Saved ${activeFilePath}`);
-    } else {
-      showToast(`Save failed: ${data.error}`);
-    }
-  } catch (e) {
-    showToast(`Save error: ${e.message}`);
-  }
+    if (data.ok) { showToast(`Saved ${activeFilePath}`); } else { showToast(`Save failed: ${data.error}`); }
+  } catch (e) { showToast(`Save error: ${e.message}`); }
 }
 
 // Markdown Preview Toggle
 function setupEditor() {
-  document.getElementById("btnTogglePreview")?.addEventListener("click", () => {
+  // Initialize Monaco Editor
+  if (typeof require !== 'undefined') {
+    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+      var isLight = document.body.classList.contains('light-theme');
+      window.monacoEditor = monaco.editor.create(document.getElementById('monacoEditor'), {
+        value: '',
+        language: 'plaintext',
+        theme: isLight ? 'vs' : 'vs-dark',
+        automaticLayout: true,
+        minimap: { enabled: true },
+        lineNumbers: 'on',
+        folding: true,
+        wordWrap: 'on',
+        scrollBeyondLastLine: false,
+        renderWhitespace: 'selection',
+        suggestOnTriggerCharacters: true,
+        quickSuggestions: true,
+        fontSize: 14,
+        fontFamily: 'Fira Code, monospace',
+        tabSize: 2,
+        insertSpaces: true,
+        bracketPairColorization: { enabled: true },
+        guides: { bracketPairs: true, indentation: true },
+      });
+      window.monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() { saveCurrentFile(); });
+    });
+  }
+  document.getElementById("btnTogglePreview")?.addEventListener("click", function() {
     isMarkdownPreview = !isMarkdownPreview;
+    var monacoEl = document.getElementById('monacoEditor');
     if (isMarkdownPreview) {
-      elCodeEditor.classList.add("hidden");
+      if (monacoEl) monacoEl.style.display = 'none';
       elMarkdownPreview.classList.remove("hidden");
       renderMarkdownPreview();
     } else {
-      elCodeEditor.classList.remove("hidden");
+      if (monacoEl) monacoEl.style.display = 'block';
       elMarkdownPreview.classList.add("hidden");
     }
   });
 }
 
 function renderMarkdownPreview() {
-  const raw = elCodeEditor.value;
+  var raw = window.monacoEditor ? window.monacoEditor.getValue() : (elCodeEditor ? elCodeEditor.value : "");
   // Simple markdown renderer for preview
   let html = raw
     .replace(/^### (.*$)/gim, '<h3>$1</h3>')
@@ -907,7 +931,7 @@ function sendMissionPrompt() {
         if (step.result_summary) result += `  ${step.result_summary}\n`;
       });
       // Display in chat
-      appendMessage("assistant", result);
+      appendChatBubble("assistant", result);
     }
   })
   .catch(e => showToast("Mission failed: " + e.message));
@@ -930,7 +954,7 @@ function sendEscalatePrompt() {
     if (data.error) {
       showToast("Escalation error: " + data.error);
     } else {
-      appendMessage("assistant", data.output || "OpenClaw escalation completed.");
+      appendChatBubble("assistant", data.output || "OpenClaw escalation completed.");
     }
   })
   .catch(e => showToast("Escalation failed: " + e.message));
@@ -2002,58 +2026,73 @@ function debounce(fn, ms) {
 let thinkingEventSource = null;
 
 function initThinkingStream(session) {
-  if (thinkingEventSource) {
-    thinkingEventSource.close();
-  }
-  
-  const content = document.getElementById("thinkingContent");
-  if (content) {
-    content.innerHTML = `<div class="thinking-placeholder">Connecting to agent stream...</div>`;
-  }
-  
-  thinkingEventSource = new EventSource(`/api/agent/stream?session=${encodeURIComponent(session)}`);
-  
-  thinkingEventSource.onmessage = (event) => {
+  if (thinkingEventSource) { thinkingEventSource.close(); }
+  var content = document.getElementById("thinkingContent");
+  if (content) { content.innerHTML = '<div class="thinking-placeholder">Connecting to agent stream...</div>'; }
+  thinkingEventSource = new EventSource('/api/agent/stream?session=' + encodeURIComponent(session));
+  var connectionTimeout = setTimeout(function() {
+    var c = document.getElementById("thinkingContent");
+    if (c && c.querySelector(".thinking-placeholder")) { c.innerHTML = '<div class="thinking-placeholder">No agent activity yet. Start a chat to see reasoning...</div>'; }
+  }, 5000);
+  thinkingEventSource.onmessage = function(event) {
+    clearTimeout(connectionTimeout);
     try {
-      const data = JSON.parse(event.data);
-      appendThinkingEvent(data);
-    } catch (e) {
-      console.warn("SSE parse error:", e);
-    }
+      var data = JSON.parse(event.data);
+      if (data.type === 'stream.token') {
+        if (!window.currentStreamingBubble) { window.currentStreamingBubble = appendStreamingBubble('assistant'); }
+        appendTokenToBubble(window.currentStreamingBubble, data.token);
+      } else {
+        if (window.currentStreamingBubble) { finalizeStreamingBubble(window.currentStreamingBubble); window.currentStreamingBubble = null; }
+        appendThinkingEvent(data);
+      }
+    } catch (e) { console.warn("SSE parse error:", e); }
   };
-  
-  thinkingEventSource.onerror = (err) => {
+  thinkingEventSource.onerror = function(err) {
+    clearTimeout(connectionTimeout);
     console.warn("SSE connection error:", err);
-    const content = document.getElementById("thinkingContent");
-    if (content) {
-      content.innerHTML = `<div class="thinking-error">Stream disconnected. Reconnecting...</div>`;
-    }
-    // Auto-reconnect with exponential backoff
-    setTimeout(() => initThinkingStream(session), 3000);
+    var c = document.getElementById("thinkingContent");
+    if (c) { c.innerHTML = '<div class="thinking-error">Stream disconnected. Reconnecting...</div>'; }
+    setTimeout(function() { initThinkingStream(session); }, 3000);
   };
+}
+
+// ── Streaming Bubble Helpers ───────────────────────────────────────
+function appendStreamingBubble(role) {
+  var messages = document.getElementById('chatMessages');
+  var bubble = document.createElement('div');
+  bubble.className = 'chat-bubble ' + role;
+  bubble.innerHTML = '<div class="bubble-meta">' + (role === 'assistant' ? 'OpenClaw - Qwen 2.5 Local' : 'You') + '</div><div class="bubble-text streaming"></div>';
+  messages.appendChild(bubble); messages.scrollTop = messages.scrollHeight;
+  return bubble.querySelector('.bubble-text');
+}
+
+function appendTokenToBubble(el, token) {
+  if (el) { el.textContent += token; var cm = document.getElementById('chatMessages'); if (cm) cm.scrollTop = cm.scrollHeight; }
+}
+
+function finalizeStreamingBubble(el) {
+  if (el) { el.classList.remove('streaming'); el.innerHTML = formatChatText(el.textContent); }
 }
 
 // ── Bottom Panel View Toggle ────────────────────────────────────────
 function switchBottomView(view) {
-  const reasoningView = document.getElementById('viewReasoning');
   const logsView = document.getElementById('viewLogs');
-  const reasoningTab = document.querySelector('[data-view="reasoning"]');
+  const terminalView = document.getElementById('viewTerminal');
   const logsTab = document.querySelector('[data-view="logs"]');
-  
-  if (view === 'reasoning') {
-    document.getElementById('viewReasoning').classList.add('active');
-    document.getElementById('viewReasoning').classList.remove('hidden');
-    document.getElementById('viewLogs').classList.add('hidden');
-    document.getElementById('viewLogs').classList.remove('active');
-    document.querySelector('[data-view="reasoning"]').classList.add('active');
-    document.querySelector('[data-view="logs"]').classList.remove('active');
+  const terminalTab = document.querySelector('[data-view="terminal"]');
+
+  if (logsView) { logsView.classList.remove('active'); logsView.classList.add('hidden'); }
+  if (terminalView) { terminalView.classList.remove('active'); terminalView.classList.add('hidden'); }
+  if (logsTab) logsTab.classList.remove('active');
+  if (terminalTab) terminalTab.classList.remove('active');
+
+  if (view === 'terminal') {
+    if (terminalView) { terminalView.classList.add('active'); terminalView.classList.remove('hidden'); }
+    if (terminalTab) terminalTab.classList.add('active');
+    initTerminalIfNeeded();
   } else {
-    document.getElementById('viewLogs').classList.add('active');
-    document.getElementById('viewLogs').classList.remove('hidden');
-    document.getElementById('viewReasoning').classList.add('hidden');
-    document.getElementById('viewReasoning').classList.remove('active');
-    document.querySelector('[data-view="logs"]').classList.add('active');
-    document.querySelector('[data-view="reasoning"]').classList.remove('active');
+    if (logsView) { logsView.classList.add('active'); logsView.classList.remove('hidden'); }
+    if (logsTab) logsTab.classList.add('active');
   }
   localStorage.setItem('bottomPanelView', view);
 }
@@ -2096,36 +2135,244 @@ function appendThinkingEvent(data) {
   content.scrollTop = content.scrollHeight;
 }
 
-function initThinkingStream(session) {
-  if (thinkingEventSource) {
-    thinkingEventSource.close();
-  }
-  
-  const content = document.getElementById("thinkingContent");
-  if (content) {
-    content.innerHTML = `<div class="thinking-placeholder">Connecting to agent stream...</div>`;
-  }
-  
-  thinkingEventSource = new EventSource(`/api/agent/stream?session=${encodeURIComponent(session)}`);
-  
-  thinkingEventSource.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      appendThinkingEvent(data);
-    } catch (e) {
-      console.warn("SSE parse error:", e);
+// ─ Thinking Panel Toggle ──────────────────────────────────────────
+function toggleThinkingPanel() {
+  const content = document.getElementById('thinkingContent');
+  const btn = document.getElementById('btnToggleThinking');
+  if (!content) return;
+  const collapsed = content.style.display === 'none';
+  content.style.display = collapsed ? 'block' : 'none';
+  if (btn) btn.textContent = collapsed ? '\u25BE' : '\u25B8';
+  localStorage.setItem('thinkingPanelCollapsed', String(!collapsed));
+}
+
+// ── Tool Action Trigger ────────────────────────────────────────────
+async function triggerToolAction(action) {
+  const chatMessages = document.getElementById('chatMessages');
+  if (!chatMessages) return;
+  const loadingBubble = document.createElement('div');
+  loadingBubble.className = 'chat-bubble assistant';
+  loadingBubble.innerHTML = '<div class="bubble-meta">OpenClaw</div><div class="bubble-text">Executing ' + action + '...</div>';
+  chatMessages.appendChild(loadingBubble);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  try {
+    const response = await fetch('/api/exec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: action })
+    });
+    const result = await response.json();
+    loadingBubble.remove();
+    if (result.ok) {
+      appendChatBubble('assistant', '**' + action + '** completed.\n\n```\n' + (result.stdout || JSON.stringify(result, null, 2)) + '\n```');
+    } else {
+      appendChatBubble('assistant', '**' + action + '** failed:\n\n```\n' + (result.error || result.stderr || 'Unknown error') + '\n```');
     }
+  } catch (error) {
+    loadingBubble.remove();
+    appendChatBubble('assistant', 'Error executing ' + action + ': ' + error.message);
+  }
+}
+
+// ── Sidebar View Switcher ──────────────────────────────────────────
+function switchSidebarView(viewName) {
+  document.querySelectorAll('.sidebar-view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.act-btn').forEach(b => b.classList.remove('active'));
+  const viewMap = { files: 'viewFiles', render: 'viewRender', crestodian: 'viewCrestodian',
+    copyright: 'viewCopyright', trace: 'viewTrace', trajectory: 'viewTrajectory',
+    tools: 'viewTools', guides: 'viewGuides', hourly: 'viewHourly', audio: 'viewAudio',
+    power: 'viewPower', readiness: 'viewReadiness', planboard: 'viewPlanboard',
+    sessions: 'viewSessions', settings: 'viewSettings' };
+  const target = document.getElementById(viewMap[viewName] || viewName);
+  if (target) target.classList.add('active');
+  const actBtn = document.querySelector('.act-btn[data-view="' + viewName + '"]');
+  if (actBtn) actBtn.classList.add('active');
+}
+
+// ── Command Palette ────────────────────────────────────────────────
+const commands = [
+  { id: 'file.save', label: 'Save File', shortcut: 'Ctrl+S', action: function() { saveCurrentFile(); } },
+  { id: 'git.commit', label: 'Git: Commit', shortcut: '', action: function() { gitCommit(); } },
+  { id: 'git.push', label: 'Git: Push', shortcut: '', action: function() { gitPush(); } },
+  { id: 'git.pull', label: 'Git: Pull', shortcut: '', action: function() { gitPull(); } },
+  { id: 'git.refresh', label: 'Git: Refresh Status', shortcut: '', action: function() { gitRefresh(); } },
+  { id: 'terminal.new', label: 'New Terminal', shortcut: 'Ctrl+`', action: function() { switchBottomView('terminal'); } },
+  { id: 'terminal.logs', label: 'Show Logs', shortcut: '', action: function() { switchBottomView('logs'); } },
+  { id: 'view.explorer', label: 'Show Explorer', shortcut: 'Ctrl+Shift+E', action: function() { switchSidebarView('files'); } },
+  { id: 'view.render', label: 'Show Render Pipeline', shortcut: '', action: function() { switchSidebarView('render'); } },
+  { id: 'view.tools', label: 'Show Tools', shortcut: '', action: function() { switchSidebarView('tools'); } },
+  { id: 'view.settings', label: 'Show Settings', shortcut: ',', action: function() { switchSidebarView('settings'); } },
+  { id: 'theme.toggle', label: 'Toggle Theme', shortcut: '', action: function() { toggleTheme(); } },
+  { id: 'agent.plan', label: 'Agent: Plan Mode', shortcut: '', action: function() { setAgentEngineMode('plan'); } },
+  { id: 'agent.build', label: 'Agent: Build Mode', shortcut: '', action: function() { setAgentEngineMode('build'); } },
+  { id: 'agent.deep_plan', label: 'Agent: Deep Plan Mode', shortcut: '', action: function() { setAgentEngineMode('deep_plan'); } },
+  { id: 'agent.vision', label: 'Agent: Vision Mode', shortcut: '', action: function() { setAgentEngineMode('vision'); } },
+];
+
+let selectedCommandIndex = 0;
+
+function showCommandPalette() {
+  var palette = document.getElementById('commandPalette');
+  var input = document.getElementById('commandInput');
+  if (!palette || !input) return;
+  palette.classList.remove('hidden');
+  input.value = '';
+  input.focus();
+  selectedCommandIndex = 0;
+  renderCommands(commands);
+  input.oninput = function() {
+    var filtered = commands.filter(function(c) { return c.label.toLowerCase().indexOf(input.value.toLowerCase()) !== -1; });
+    selectedCommandIndex = 0;
+    renderCommands(filtered);
   };
-  
-  thinkingEventSource.onerror = (err) => {
-    console.warn("SSE connection error:", err);
-    const content = document.getElementById("thinkingContent");
-    if (content) {
-      content.innerHTML = `<div class="thinking-error">Stream disconnected. Reconnecting...</div>`;
-    }
-    // Auto-reconnect with exponential backoff
-    setTimeout(() => initThinkingStream(session), 3000);
+  input.onkeydown = function(e) {
+    var items = document.getElementById('commandList').querySelectorAll('.command-item');
+    if (e.key === 'ArrowDown') { e.preventDefault(); selectedCommandIndex = Math.min(selectedCommandIndex + 1, items.length - 1); updateSelectedCommand(items); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); selectedCommandIndex = Math.max(selectedCommandIndex - 1, 0); updateSelectedCommand(items); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (items[selectedCommandIndex]) items[selectedCommandIndex].click(); }
+    else if (e.key === 'Escape') { hideCommandPalette(); }
   };
 }
 
+function hideCommandPalette() {
+  var p = document.getElementById('commandPalette');
+  if (p) p.classList.add('hidden');
+}
+
+function renderCommands(cmds) {
+  var list = document.getElementById('commandList');
+  if (!list) return;
+  list.innerHTML = cmds.map(function(c, i) {
+    return '<div class="command-item' + (i === selectedCommandIndex ? ' selected' : '') + '" onclick="executeCommand(\'' + c.id + '\')" data-index="' + i + '"><span>' + c.label + '</span><span class="shortcut">' + c.shortcut + '</span></div>';
+  }).join('');
+}
+
+function updateSelectedCommand(items) {
+  for (var i = 0; i < items.length; i++) { items[i].classList.toggle('selected', i === selectedCommandIndex); }
+}
+
+function executeCommand(id) {
+  var cmd = null;
+  for (var i = 0; i < commands.length; i++) { if (commands[i].id === id) { cmd = commands[i]; break; } }
+  if (cmd) { cmd.action(); hideCommandPalette(); }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.ctrlKey && e.shiftKey && e.key === 'P') { e.preventDefault(); showCommandPalette(); }
+  if (e.key === 'Escape') { hideCommandPalette(); }
+});
+
+// ── Theme Toggle ───────────────────────────────────────────────────
+function toggleTheme() {
+  var body = document.body;
+  var isLight = body.classList.contains('light-theme');
+  body.classList.toggle('light-theme', !isLight);
+  body.classList.toggle('dark-theme', isLight);
+  localStorage.setItem('theme', isLight ? 'dark' : 'light');
+  if (window.monacoEditor) {
+    try { monaco.editor.setTheme(isLight ? 'vs-dark' : 'vs'); } catch(e) {}
+  }
+  showToast('Switched to ' + (isLight ? 'dark' : 'light') + ' theme', 'success');
+}
+
+(function() {
+  var savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'light') { document.body.classList.add('light-theme'); document.body.classList.remove('dark-theme'); }
+})();
+
+// ── Panel Resizer ──────────────────────────────────────────────────
+(function initPanelResizer() {
+  var handle = document.getElementById('resizeCenterAgent');
+  if (!handle) return;
+  var isResizing = false, startX = 0, startWidth = 400;
+  handle.addEventListener('mousedown', function(e) {
+    isResizing = true; startX = e.clientX;
+    startWidth = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agent-width')) || 400;
+    document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none';
+    handle.classList.add('active');
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!isResizing) return;
+    var delta = startX - e.clientX;
+    var newWidth = Math.max(300, Math.min(700, startWidth + delta));
+    document.documentElement.style.setProperty('--agent-width', newWidth + 'px');
+    localStorage.setItem('agentPanelWidth', newWidth);
+  });
+  document.addEventListener('mouseup', function() {
+    if (isResizing) { isResizing = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; handle.classList.remove('active'); }
+  });
+  var savedWidth = localStorage.getItem('agentPanelWidth');
+  if (savedWidth) document.documentElement.style.setProperty('--agent-width', savedWidth + 'px');
+})();
+
+// ── Terminal (xterm.js) ────────────────────────────────────────────
+var xterm = null, xtermWs = null;
+
+function initTerminal() {
+  var container = document.getElementById('xtermContainer');
+  if (!container || xterm || typeof Terminal === 'undefined') return;
+  xterm = new Terminal({ cursorBlink: true, cursorStyle: 'bar', fontSize: 14, fontFamily: 'Fira Code, monospace',
+    theme: { background: '#1a1a1a', foreground: '#ffffff', cursor: '#ffffff', selectionBackground: '#264f78' }, allowProposedApi: true });
+  var fitAddon = new FitAddon.FitAddon(); xterm.loadAddon(fitAddon); xterm.open(container); fitAddon.fit();
+  xtermWs = new WebSocket('ws://127.0.0.1:8766');
+  xtermWs.onopen = function() { xterm.writeln('\x1b[32mTerminal connected\x1b[0m'); };
+  xtermWs.onmessage = function(event) {
+    try { var d = JSON.parse(event.data); if (d.type === 'file.changed') { var cf = document.getElementById('activeFilePath'); if (cf && event.data.indexOf(cf.textContent) !== -1) { openFile(cf.textContent); showToast('File updated externally', 'info'); } loadFileTree(); return; } } catch(e) {}
+    xterm.write(event.data);
+  };
+  xtermWs.onclose = function() { xterm.writeln('\x1b[31mTerminal disconnected\x1b[0m'); };
+  xterm.onData(function(data) { if (xtermWs && xtermWs.readyState === WebSocket.OPEN) xtermWs.send(data); });
+  window.addEventListener('resize', function() { if (xterm && fitAddon) fitAddon.fit(); });
+}
+
+function initTerminalIfNeeded() { if (!xterm) setTimeout(initTerminal, 200); }
+
+// ── Git Integration ────────────────────────────────────────────────
+async function gitRefresh() {
+  try {
+    var res = await fetch('/api/git/status'); var data = await res.json();
+    var section = document.getElementById('gitSection');
+    if (!section) return;
+    if (data.ok) {
+      section.style.display = 'block';
+      var bn = document.getElementById('gitBranchName'); if (bn) bn.textContent = data.branch.replace('## ', '');
+      var cd = document.getElementById('gitChanges');
+      if (!data.files || data.files.length === 0) { cd.innerHTML = '<div class="git-clean">Working tree clean</div>'; }
+      else { cd.innerHTML = data.files.map(function(f) {
+        var cls = f.status.indexOf('M') !== -1 ? 'modified' : f.status.indexOf('A') !== -1 ? 'added' : f.status.indexOf('D') !== -1 ? 'deleted' : 'untracked';
+        return '<div class="git-file ' + cls + '"><span class="git-status">' + f.status + '</span><span class="git-path">' + f.path + '</span><button class="git-stage-btn" onclick="gitStage(\'' + f.path.replace(/'/g, "\\'") + '\')">+</button></div>';
+      }).join(''); }
+    } else { section.style.display = 'none'; }
+  } catch(e) { console.error('Git refresh error:', e); }
+}
+
+async function gitStage(filePath) {
+  try { var res = await fetch('/api/git/stage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: filePath }) }); var r = await res.json(); if (r.ok) { gitRefresh(); showToast('File staged', 'success'); } } catch(e) { showToast('Stage failed', 'error'); }
+}
+
+async function gitCommit() {
+  var msg = prompt('Commit message:'); if (!msg) return;
+  try { var res = await fetch('/api/git/commit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg, files: [] }) }); var r = await res.json(); if (r.ok) { showToast('Committed', 'success'); gitRefresh(); } else { showToast('Commit failed: ' + (r.error || ''), 'error'); } } catch(e) { showToast('Commit failed', 'error'); }
+}
+
+async function gitPush() {
+  try { var res = await fetch('/api/git/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); var r = await res.json(); showToast(r.ok ? 'Pushed' : 'Push failed: ' + (r.error || ''), r.ok ? 'success' : 'error'); } catch(e) { showToast('Push failed', 'error'); }
+}
+
+async function gitPull() {
+  try { var res = await fetch('/api/git/pull', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) }); var r = await res.json(); if (r.ok) { showToast('Pulled', 'success'); gitRefresh(); } else { showToast('Pull failed: ' + (r.error || ''), 'error'); } } catch(e) { showToast('Pull failed', 'error'); }
+}
+
+// ── Model Selection ────────────────────────────────────────────────
+async function changeModel(model) {
+  try { var res = await fetch('/api/model', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model }) }); var r = await res.json(); showToast(r.ok ? 'Model: ' + model : 'Failed to change model', r.ok ? 'success' : 'error'); } catch(e) { showToast('Failed to change model', 'error'); }
+}
+
+// ── Token Usage Display ────────────────────────────────────────────
+var sessionTokens = { prompt: 0, completion: 0 };
+function updateTokenDisplay() {
+  var el = document.getElementById('tokenUsage'); if (!el) return;
+  var total = sessionTokens.prompt + sessionTokens.completion, max = 32768, pct = Math.min((total / max) * 100, 100);
+  el.innerHTML = '<div class="token-bar"><div class="token-fill" style="width:' + pct + '%"></div></div><div class="token-text">' + total.toLocaleString() + ' / ' + max.toLocaleString() + ' tokens</div>';
+}
 

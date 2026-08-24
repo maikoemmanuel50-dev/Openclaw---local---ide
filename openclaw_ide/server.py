@@ -286,6 +286,11 @@ def read_prompt_history(limit=20):
 # ── Agent-loop execution trace (for debugging feedback/error loops) ─────
 AGENT_TRACE_PATH = (WORKSPACE_ROOT / ".agent_trace.jsonl").resolve()
 
+# Ensure trace file exists on startup
+AGENT_TRACE_PATH.parent.mkdir(parents=True, exist_ok=True)
+if not AGENT_TRACE_PATH.exists():
+    AGENT_TRACE_PATH.touch()
+
 
 def trace_agent(entry):
     """Append one agent-loop trace record (round, tool, error, outcome)."""
@@ -2628,6 +2633,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self.handle_session_detail(query)
         elif path == "/api/agent/stream":
             self.handle_agent_stream(query.get("session", [None])[0])
+        elif path == "/api/git/status":
+            self._send_json(handle_git_status())
         else:
             super().do_GET()
 
@@ -2674,6 +2681,22 @@ class IDEHandler(SimpleHTTPRequestHandler):
         elif path == "/api/power":
             action = payload.get("action", "")
             self._send_json(apply_power_action(action, payload))
+        elif path == "/api/git/diff":
+            self._send_json(handle_git_diff(payload))
+        elif path == "/api/git/commit":
+            self._send_json(handle_git_commit(payload))
+        elif path == "/api/git/branch":
+            self._send_json(handle_git_branch(payload))
+        elif path == "/api/git/log":
+            self._send_json(handle_git_log(payload))
+        elif path == "/api/git/push":
+            self._send_json(handle_git_push(payload))
+        elif path == "/api/git/pull":
+            self._send_json(handle_git_pull(payload))
+        elif path == "/api/git/stage":
+            self._send_json(handle_git_stage(payload))
+        elif path == "/api/model":
+            self._send_json(handle_model_change(payload))
         else:
             self.send_error(404, "Unknown API endpoint")
 
@@ -2816,64 +2839,6 @@ class IDEHandler(SimpleHTTPRequestHandler):
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S")
         }
 
-    def handle_api_status(self):
-        _now = time.time()
-        if _STATUS_CACHE["ts"] and _now - _STATUS_CACHE["ts"] < 2.0:
-            self._send_json(_STATUS_CACHE["data"])
-            return
-        ollama_status = ping_ollama()
-        battery = get_battery_info()
-        render_prog = get_render_progress()
-        crestodian = get_crestodian_info()
-        download = get_download_progress()
-        active_model = resolve_default_model()
-        vision_ok = vl_ready()
-
-        status = {
-            "workspace": str(WORKSPACE_ROOT),
-            "ollama": ollama_status,
-            "defaultModel": DEFAULT_MODEL,
-            "activeModel": active_model,
-            "modelRouting": {
-                "general": _CODER_MODEL,
-                "vision": _VL_MODEL,
-                "policy": "general agentic tasks use the 14b; visual tasks route to the 7b via /api/vision and inspect_image",
-            },
-            "vision": {
-                "model": _VL_MODEL,
-                "active": vision_ok,
-                "ready": vision_ok,
-            },
-            "download": download,
-            "battery": battery,
-            "render": render_prog,
-            "openclaw": {
-                "installed": True,
-                "version": "2026.7.1-2",
-                "rules": "AGENTS.md active"
-            },
-            "crestodian": crestodian,
-            "agent": {
-                "executor": True,
-                "actions": list(EXEC_ACTIONS.keys()),
-                "shellProbes": [k for k, _ in ALLOWED_SHELL_PATTERNS],
-                "vision": vision_ok,
-                "escalation": "openclaw gateway (port 18789)",
-                "mission": "analyze → rank → sequential execute (/api/mission)",
-                "gates": {"oneGpuJob": True, "fourKHold": True, "cpuWhileGpu": True}
-            },
-            "tools": {
-                "composio": {"status": "Ready & Authenticated", "auth": True},
-                "canva": {"status": "Active (canva_airway-sasin)", "auth": True},
-                "blender_mcp": {"status": "Configured (5.1.2)", "port": 9876},
-                "resolve_mcp": {"status": "Bridge Configured", "port": 49632},
-                "crestodian": {"status": "Enforced & Attested", "attestations": crestodian.get("attestationsCount", 0)}
-            }
-        }
-        _STATUS_CACHE["ts"] = _now
-        _STATUS_CACHE["data"] = status
-        self._send_json(status)
-
     def handle_render_progress(self):
         self._send_json(get_render_progress())
 
@@ -2944,7 +2909,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         
         target = WORKSPACE_ROOT / log_name
         if not target.exists():
-            target_live = LIVE_RENDER_ROOT.parent / log_name
+            target_live = RENDER_ROOT.parent / log_name
             if target_live.exists():
                 target = target_live
             else:
@@ -3719,7 +3684,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
                             event = json.loads(line.strip())
                             if event.get("session") == session:
                                 # Filter to thinking/tool events
-                                if event.get("event") in ("round", "tool", "thinking", "loop.start"):
+                                if event.get("event") in ("round", "loop.start", "loop.term", "loop.converged",
+                                    "loop.stuck", "loop.blocked_streak", "loop.info_only", "loop.wallclock",
+                                    "loop.ollama_error", "loop.max_rounds", "loop.fastpath", "mission.step",
+                                    "stream.token"):
                                     data = json.dumps({
                                         "type": event["event"],
                                         "round": event.get("round"),
@@ -3850,6 +3818,189 @@ class IDEHandler(SimpleHTTPRequestHandler):
         with open(exec_file, "r", encoding="utf-8") as f:
             plan = json.load(f)
         self._send_json(plan)
+
+
+# ── Git Integration ─────────────────────────────────────────────────
+def _run_git(args, cwd=None):
+    try:
+        r = subprocess.run(["git"] + args, cwd=cwd or str(WORKSPACE_ROOT), capture_output=True, text=True, timeout=30)
+        return {"ok": r.returncode == 0, "stdout": r.stdout, "stderr": r.stderr}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Git command timed out"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+def handle_git_status():
+    r = _run_git(["status", "--porcelain", "--branch"])
+    if r["ok"]:
+        lines = r["stdout"].strip().split('\n')
+        branch = lines[0] if lines else ""
+        files = []
+        for line in lines[1:]:
+            if line.strip():
+                files.append({"status": line[:2].strip(), "path": line[3:].strip()})
+        return {"ok": True, "branch": branch, "files": files}
+    return {"ok": False, "error": r.get("error", "Not a git repository")}
+
+def handle_git_diff(payload):
+    fp = payload.get("file", "")
+    if not fp: return {"ok": False, "error": "File path required"}
+    r = _run_git(["diff", "--", fp])
+    return {"ok": r["ok"], "diff": r["stdout"], "error": r.get("stderr")}
+
+def handle_git_commit(payload):
+    msg = payload.get("message", "")
+    files = payload.get("files", [])
+    if not msg: return {"ok": False, "error": "Commit message required"}
+    for f in files: _run_git(["add", f])
+    r = _run_git(["commit", "-m", msg])
+    return {"ok": r["ok"], "output": r["stdout"], "error": r.get("stderr")}
+
+def handle_git_branch(payload):
+    action = payload.get("action", "list")
+    branch = payload.get("branch", "")
+    if action == "list":
+        r = _run_git(["branch", "-a"])
+        return {"ok": r["ok"], "branches": r["stdout"].strip().split('\n') if r["ok"] else []}
+    elif action == "create":
+        if not branch: return {"ok": False, "error": "Branch name required"}
+        r = _run_git(["checkout", "-b", branch])
+        return {"ok": r["ok"], "output": r["stdout"]}
+    elif action == "checkout":
+        if not branch: return {"ok": False, "error": "Branch name required"}
+        r = _run_git(["checkout", branch])
+        return {"ok": r["ok"], "output": r["stdout"]}
+    elif action == "delete":
+        if not branch: return {"ok": False, "error": "Branch name required"}
+        r = _run_git(["branch", "-D", branch])
+        return {"ok": r["ok"], "output": r["stdout"]}
+    return {"ok": False, "error": "Unknown action"}
+
+def handle_git_log(payload):
+    limit = min(int(payload.get("limit", 20)), 100)
+    r = _run_git(["log", "--oneline", "-%d" % limit])
+    return {"ok": r["ok"], "log": r["stdout"].strip().split('\n') if r["ok"] else []}
+
+def handle_git_push(payload):
+    remote = payload.get("remote", "origin")
+    branch = payload.get("branch", "")
+    args = ["push", remote] + ([branch] if branch else [])
+    r = _run_git(args)
+    return {"ok": r["ok"], "output": r["stdout"], "error": r.get("stderr")}
+
+def handle_git_pull(payload):
+    remote = payload.get("remote", "origin")
+    branch = payload.get("branch", "")
+    args = ["pull", remote] + ([branch] if branch else [])
+    r = _run_git(args)
+    return {"ok": r["ok"], "output": r["stdout"], "error": r.get("stderr")}
+
+def handle_git_stage(payload):
+    fp = payload.get("file", "")
+    if not fp: return {"ok": False, "error": "File path required"}
+    r = _run_git(["add", fp])
+    return {"ok": r["ok"], "error": r.get("stderr")}
+
+def handle_model_change(payload):
+    global DEFAULT_MODEL
+    model = payload.get("model", "")
+    if not model: return {"ok": False, "error": "Model required"}
+    DEFAULT_MODEL = model
+    return {"ok": True, "model": model}
+
+
+# ── WebSocket Terminal Server ───────────────────────────────────────
+try:
+    import asyncio
+    import websockets
+    HAS_WEBSOCKETS = True
+except ImportError:
+    HAS_WEBSOCKETS = False
+
+_terminal_ws_clients = set()
+_terminal_ws_loop = None
+
+if HAS_WEBSOCKETS:
+    async def _terminal_handler(websocket):
+        _terminal_ws_clients.add(websocket)
+        master_fd = None
+        pid = None
+        try:
+            import pty, signal, select, struct, fcntl, termios
+            master_fd, slave_fd = pty.openpty()
+            size = struct.pack('HHHH', 24, 80, 0, 0)
+            try: fcntl.ioctl(master_fd, termios.TIOCSWINSZ, size)
+            except: pass
+            pid = os.fork()
+            if pid == 0:
+                os.close(master_fd)
+                os.setsid()
+                try: fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
+                except: pass
+                os.dup2(slave_fd, 0); os.dup2(slave_fd, 1); os.dup2(slave_fd, 2)
+                if slave_fd > 2: os.close(slave_fd)
+                os.execvp("powershell", ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"])
+            else:
+                os.close(slave_fd)
+                await websocket.send("OpenClaw Terminal\r\nType 'exit' to close\r\n\r\n")
+                while True:
+                    r, _, _ = select.select([master_fd], [], [], 0.1)
+                    if r:
+                        try:
+                            data = os.read(master_fd, 4096).decode('utf-8', errors='replace')
+                            await websocket.send(data)
+                        except: break
+                    try:
+                        msg = await asyncio.wait_for(websocket.recv(), timeout=0.1)
+                        os.write(master_fd, msg.encode())
+                    except asyncio.TimeoutError: pass
+                    except: break
+        except Exception: pass
+        finally:
+            _terminal_ws_clients.discard(websocket)
+            if master_fd is not None:
+                try: os.close(master_fd)
+                except: pass
+            if pid is not None:
+                try: os.kill(pid, signal.SIGTERM)
+                except: pass
+
+    async def _start_terminal_server():
+        global _terminal_ws_loop
+        _terminal_ws_loop = asyncio.get_event_loop()
+        async with websockets.serve(_terminal_handler, "127.0.0.1", 8766, max_size=10**7, ping_interval=20, ping_timeout=20):
+            await asyncio.Future()
+
+    def _start_terminal_background():
+        try: asyncio.run(_start_terminal_server())
+        except Exception as e: print(f"[terminal] WebSocket server failed: {e}")
+
+    threading.Thread(target=_start_terminal_background, daemon=True).start()
+
+
+# ── File Watcher ────────────────────────────────────────────────────
+try:
+    from watchdog.observers import Observer
+    from watchdog.events import FileSystemEventHandler
+    HAS_WATCHDOG = True
+except ImportError:
+    HAS_WATCHDOG = False
+
+if HAS_WATCHDOG:
+    class _FileChangeHandler(FileSystemEventHandler):
+        def on_modified(self, event):
+            if not event.is_directory:
+                msg = json.dumps({"type": "file.changed", "path": event.src_path})
+                for client in list(_terminal_ws_clients):
+                    try:
+                        if _terminal_ws_loop:
+                            asyncio.run_coroutine_threadsafe(client.send(msg), _terminal_ws_loop)
+                    except: pass
+
+    _file_observer = Observer()
+    _file_observer.schedule(_FileChangeHandler(), str(WORKSPACE_ROOT), recursive=True)
+    _file_observer.daemon = True
+    _file_observer.start()
 
 
 def run_server(port=8765):

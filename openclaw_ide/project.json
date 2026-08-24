@@ -32,5 +32,139 @@
   "logFiles": [
     "production_log.txt"
   ],
-  "scenes": []
+  "scenes": [],
+  "plan": {
+    "version": 1,
+    "generated": "2026-08-24T06:31:03Z",
+    "model": "qwen2.5-coder:7b",
+    "phases": [
+      {
+        "id": 1,
+        "name": "Pre-Production",
+        "days": 5,
+        "tasks": [
+          {
+            "id": "1.1",
+            "name": "Concept Brief",
+            "depends_on": [],
+            "deliverable": "docs/concept.md",
+            "estimate_hrs": 4
+          },
+          {
+            "id": "1.2",
+            "name": "Script Outline",
+            "depends_on": [
+              "1.1"
+            ],
+            "deliverable": "scripts/outline.md",
+            "estimate_hrs": 6
+          },
+          {
+            "id": "1.3",
+            "name": "Storyboard Creation",
+            "depends_on": [
+              "1.2"
+            ],
+            "deliverable": "assets/storyboards/initial_storyboard.png",
+            "estimate_hrs": 8
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Production",
+        "days": 10,
+        "tasks": [
+          {
+            "id": "2.1",
+            "name": "Pre-Render Setup",
+            "depends_on": [
+              "1.3"
+            ],
+            "deliverable": null,
+            "estimate_hrs": 2
+          },
+          {
+            "id": "2.2",
+            "name": "Initial Render",
+            "depends_on": [
+              "2.1"
+            ],
+            "deliverable": "video_clips/masters/initial_render.mp4",
+            "estimate_days": 5
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Post-Production",
+        "days": 7,
+        "tasks": [
+          {
+            "id": "3.1",
+            "name": "Color Grading",
+            "depends_on": [
+              "2.2"
+            ],
+            "deliverable": "video_clips/master_colorgraded.mp4",
+            "estimate_days": 2
+          },
+          {
+            "id": "3.2",
+            "name": "Audio Mixing",
+            "depends_on": [
+              "2.2"
+            ],
+            "deliverable": "audio/mixed_audio.wav",
+            "estimate_days": 1
+          },
+          {
+            "id": "3.3",
+            "name": "Final Assembly",
+            "depends_on": [
+              "3.1",
+              "3.2"
+            ],
+            "deliverable": "final_output.mp4",
+            "estimate_days": 2
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "Delivery",
+        "days": 2,
+        "tasks": [
+          {
+            "id": "4.1",
+            "name": "Quality Assurance Check",
+            "depends_on": [
+              "3.3"
+            ],
+            "deliverable": null,
+            "estimate_days": 1
+          },
+          {
+            "id": "4.2",
+            "name": "Final Delivery",
+            "depends_on": [
+              "4.1"
+            ],
+            "deliverable": "delivery/final_project.mp4",
+            "estimate_days": 1
+          }
+        ]
+      }
+    ],
+    "tasks": [],
+    "handoff": {},
+    "meta": {
+      "total_estimate_days": 25,
+      "gates": [
+        "4K HOLD",
+        "one GPU job"
+      ],
+      "handoff_ready": true
+    }
+  }
 }
