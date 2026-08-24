@@ -31,6 +31,9 @@ STATUS_*.txt
 *.db
 .session_index.db
 
+# Generated runtime state
+.plan_state.json
+
 # All binary assets — tracked locally only
 assets/
 blend/

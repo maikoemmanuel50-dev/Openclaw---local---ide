@@ -61,6 +61,15 @@ def load_project_config():
             RENDER_ROOT = (config_path.parent / render_root).resolve()
         else:
             RENDER_ROOT = Path(render_root).resolve()
+        
+        # Load plan state from separate file (runtime-generated, not tracked in git)
+        plan_state_path = config_path.parent / ".plan_state.json"
+        if plan_state_path.exists():
+            try:
+                with open(plan_state_path, "r", encoding="utf-8") as f:
+                    PROJECT_CONFIG["plan"] = json.load(f)
+            except Exception:
+                pass  # If plan state is corrupted, just skip it
     else:
         # Priority 3: Auto-discover from workspace
         PROJECT_CONFIG = {
@@ -2207,15 +2216,10 @@ def extract_plan_json(text):
 
 
 def save_plan_to_project(plan_json):
-    """Write plan to project.json atomically."""
-    config_path = IDE_ROOT / "project.json"
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-    except Exception:
-        config = {}
+    """Write plan to .plan_state.json atomically (separate from static config)."""
+    plan_state_path = IDE_ROOT / ".plan_state.json"
     
-    config["plan"] = {
+    plan_state = {
         "version": 1,
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "model": "qwen2.5-coder:7b",
@@ -2230,14 +2234,14 @@ def save_plan_to_project(plan_json):
     }
     
     # Atomic write
-    tmp = config_path.with_suffix(".tmp")
+    tmp = plan_state_path.with_suffix(".tmp")
     with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, config_path)
+        json.dump(plan_state, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, plan_state_path)
     
     # Reload global config
     load_project_config()
-    return {"ok": True, "plan": config["plan"]}
+    return {"ok": True, "plan": plan_state}
 
 
 # ─── Session Search Index (SQLite FTS5) ──────────────────────────────
