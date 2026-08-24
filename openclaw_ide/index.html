@@ -407,6 +407,7 @@
       </div>
 
     </aside>
+
     <!-- Center Area: Thinking Panel + Log Box -->
     <div class="center-area">
       <!-- Thinking Panel -->
@@ -449,69 +450,6 @@
         </div>
       </div>
     </div>
-
-resizeSidebar" title="Drag to resize sidebar"></div>
-
-    <!-- Center Editor / Viewer Area -->
-    <main class="editor-area">
-      <!-- Editor Tabs Bar -->
-      <div class="editor-tabs-bar" id="tabsBar">
-      </div>
-
-      <!-- Editor Toolbar -->
-      <div class="editor-toolbar">
-        <span class="file-path-display" id="activeFilePath">No file open</span>
-        <div class="toolbar-actions">
-          <button class="btn-toolbar" id="btnSaveFile" title="Save changes (Ctrl+S)">💾 Save</button>
-          <button class="btn-toolbar" id="btnTogglePreview" title="Toggle Rendered Preview">👁️ Preview</button>
-        </div>
-      </div>
-
-      <!-- Editor Work Surface -->
-      <div class="editor-surface">
-        <textarea class="code-editor" id="codeEditor" spellcheck="false"></textarea>
-        <div class="markdown-preview hidden" id="markdownPreview"></div>
-      </div>
-
-      <!-- Resize handle: editor ↔ bottom panel -->
-      <div class="resize-handle resize-h" id="resizeBottom" title="Drag to resize log panel"></div>
-
-      <!-- Bottom Panel (Toggle: Agent Reasoning / Log Output) -->
-      <div class="bottom-panel" id="bottomPanel">
-        <div class="panel-header">
-          <div class="panel-tabs" id="bottomTabs">
-            <button class="panel-tab" data-view="reasoning" onclick="switchBottomView('reasoning')>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-              Agent Reasoning
-            </button>
-            <button class="panel-tab active" data-view="logs" onclick="switchBottomView('logs')>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-              Log Output
-            </button>
-          </div>
-          <div class="panel-controls">
-            <button class="icon-btn" id="btnRefreshLog" title="Refresh Log">↻</button>
-            <button class="icon-btn" id="btnToggleBottom" title="Collapse Panel">▾</button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <!-- Log Output View -->
-          <div class="view-content active" id="viewLogs">
-            <pre class="log-stream" id="logStreamContent">Loading log stream...</pre>
-            <div class="terminal-box" id="terminalBox">
-              <div class="term-output" id="termOutput">Type PowerShell command or OpenClaw dispatch below...</div>
-              <div class="term-input-row">
-                <span class="term-prompt">></span>
-                <input type="text" id="termInput" placeholder="e.g. python scripts/qwen_local.py ping" />
-                <button id="btnRunTerm">Execute</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-    <!-- Resize handle: editor ↔ agent panel -->
-    <div class="resize-handle resize-v" id="resizeAgent" title="Drag to resize agent panel"></div>
 
     <!-- Right OpenClaw Agent Chat Panel -->
     <aside class="agent-panel" id="agentPanel">
@@ -597,17 +535,6 @@ resizeSidebar" title="Drag to resize sidebar"></div>
           <strong>Mission:</strong> Server-side sequential execution (no timeout). 
           <strong>Escalate:</strong> Delegate to OpenClaw for multi-step cross-app work.
         </p>
-      </div>
-
-      <!-- Thinking Panel -->
-      <div class="thinking-panel" id="thinkingPanel">
-        <div class="thinking-header">
-          <h4>🧠 Agent Thinking</h4>
-          <button class="icon-btn" id="btnToggleThinking" onclick="toggleThinkingPanel()" title="Toggle">▾</button>
-        </div>
-        <div class="thinking-content" id="thinkingContent">
-          <div class="thinking-placeholder">Start a chat to see agent reasoning...</div>
-        </div>
       </div>
 
       <!-- Chat Stream -->

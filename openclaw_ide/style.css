@@ -297,12 +297,13 @@ body {
   background: var(--gold-500);
 }
 
-/* IDE Container */
+/* IDE Container - CSS Grid Layout */
 .ide-container {
-  flex: 1;
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--activity-width) var(--sidebar-width) 1fr var(--agent-width);
+  grid-template-rows: 1fr;
+  height: calc(100vh - var(--header-height) - var(--footer-height));
   overflow: hidden;
-  position: relative;
 }
 
 /* Activity Bar — darkest teal */
@@ -392,9 +393,10 @@ body {
 
 /* Sidebar Drawer */
 .sidebar-drawer {
+  grid-column: 2;
   width: var(--sidebar-width);
   background-color: var(--green-950);
-  border-right: none;
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -904,11 +906,13 @@ body {
 
 /* Agent Panel */
 .agent-panel {
+  grid-column: 4;
   width: var(--agent-width);
   background: var(--green-950);
-  border-left: none;
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .agent-header {
   padding: 14px 16px;
@@ -1108,22 +1112,23 @@ body {
 
 /* Center Area (Thinking Panel + Log Box) */
 .center-area {
-  flex: 1;
+  grid-column: 3;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
   border-right: 1px solid var(--border);
-  height: 100%;
 }
 
-/* Ensure thinking panel fills available space */
+/* Thinking Panel */
 .thinking-panel {
-  border-top: 1px solid var(--border);
+  flex: 1;
   background: var(--gold-100);
   display: flex;
   flex-direction: column;
-  flex: 1;
   min-height: 200px;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
 }
 
 /* Bottom Panel */
@@ -1132,25 +1137,6 @@ body {
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border);
-}
-
-/* Panel borders */
-.sidebar-drawer {
-  border-right: 1px solid var(--border);
-}
-
-.agent-panel {
-  border-left: 1px solid var(--border);
-}
-
-
-/* Center Area (Thinking Panel + Log Box) */
-.center-area {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-  flex: 1;
 }
 
 /* Thinking Panel */
@@ -1177,15 +1163,6 @@ body {
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border);
-}
-
-/* Panel Borders */
-.sidebar-drawer {
-  border-right: 1px solid var(--border);
-}
-
-.agent-panel {
-  border-left: 1px solid var(--border);
 }
 
 @keyframes fadeIn {
