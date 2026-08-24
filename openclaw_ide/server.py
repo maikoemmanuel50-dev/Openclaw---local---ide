@@ -3584,7 +3584,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
         
         if q:
             where.append("sessions_fts MATCH ?")
-            params.append(q)
+            escaped_q = q.replace('"', '""')
+            params.append(f'"{escaped_q}"')
         if mode:
             where.append("mode = ?")
             params.append(mode)
@@ -3606,7 +3607,12 @@ class IDEHandler(SimpleHTTPRequestHandler):
         """
         params.extend([limit, offset])
         
-        rows = conn.execute(sql, params).fetchall()
+        try:
+            rows = conn.execute(sql, params).fetchall()
+        except sqlite3.OperationalError as e:
+            conn.close()
+            self._send_json({"error": f"Search error: {str(e)}", "results": [], "total": 0, "query": q})
+            return
         conn.close()
         
         results = []
