@@ -439,11 +439,11 @@
       <div class="bottom-panel" id="bottomPanel">
         <div class="panel-header">
           <div class="panel-tabs" id="bottomTabs">
-            <button class="panel-tab active" data-view="reasoning" onclick="switchBottomView('reasoning')">
+            <button class="panel-tab" data-view="reasoning" onclick="switchBottomView('reasoning')>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
               Agent Reasoning
             </button>
-            <button class="panel-tab" data-view="logs" onclick="switchBottomView('logs')">
+            <button class="panel-tab active" data-view="logs" onclick="switchBottomView('logs')>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
               Log Output
             </button>
@@ -455,9 +455,9 @@
         </div>
         <div class="panel-body">
           <!-- Log Output View -->
-          <div class="view-content hidden" id="viewLogs">
+          <div class="view-content active" id="viewLogs">
             <pre class="log-stream" id="logStreamContent">Loading log stream...</pre>
-            <div class="terminal-box hidden" id="terminalBox">
+            <div class="terminal-box" id="terminalBox">
               <div class="term-output" id="termOutput">Type PowerShell command or OpenClaw dispatch below...</div>
               <div class="term-input-row">
                 <span class="term-prompt">></span>
