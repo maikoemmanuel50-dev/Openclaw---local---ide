@@ -2912,6 +2912,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json(list_audio_files())
         elif path == "/api/audio/file":
             self.handle_audio_file(query.get("path", [""])[0])
+        elif path == "/api/plan/list":
+            self.handle_plan_list()
+        elif path == "/api/plan/read":
+            self.handle_plan_read(query)
         elif path == "/api/power":
             self._send_json(get_power_state())
         elif path == "/api/system/network":
@@ -3915,6 +3919,51 @@ class IDEHandler(SimpleHTTPRequestHandler):
         result["validation_issues"] = issues if was_fixed else []
         self._send_json(result)
 
+    def handle_plan_list(self):
+        """GET /api/plan/list — List all saved plan files."""
+        plans_dir = IDE_ROOT / ".plans"
+        plans_dir.mkdir(exist_ok=True)
+        
+        plans = []
+        for plan_file in plans_dir.glob("*.json"):
+            try:
+                with open(plan_file, "r", encoding="utf-8") as f:
+                    plan_data = json.load(f)
+                plans.append({
+                    "filename": plan_file.name,
+                    "project": plan_data.get("project", plan_file.stem),
+                    "generated": plan_data.get("generated", ""),
+                    "total_estimate_days": plan_data.get("meta", {}).get("total_estimate_days", 0),
+                    "phases_count": len(plan_data.get("phases", [])),
+                    "handoff_ready": plan_data.get("meta", {}).get("handoff_ready", False),
+                })
+            except Exception:
+                pass
+        
+        plans.sort(key=lambda x: x.get("generated", ""), reverse=True)
+        self._send_json({"plans": plans})
+
+    def handle_plan_read(self, query):
+        """GET /api/plan/read — Read a specific plan file."""
+        filename = query.get("file", [""])[0]
+        if not filename:
+            self._send_json({"error": "File parameter required"}, 400)
+            return
+        
+        plans_dir = IDE_ROOT / ".plans"
+        plan_file = plans_dir / filename
+        
+        if not plan_file.exists() or not plan_file.suffix == ".json":
+            self._send_json({"error": "Plan file not found"}, 404)
+            return
+        
+        try:
+            with open(plan_file, "r", encoding="utf-8") as f:
+                plan_data = json.load(f)
+            self._send_json({"ok": True, "plan": plan_data})
+        except Exception as e:
+            self._send_json({"error": str(e)}, 500)
+
     def handle_search_sessions(self, query):
         """POST /api/sessions/search — full-text search with filters."""
         try:
@@ -4047,7 +4096,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
             },
         })
 
-    def handle_agent_stream(self, session):
+def handle_agent_stream(self, session):
         """SSE stream of agent thinking events for a session."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -4072,11 +4121,11 @@ class IDEHandler(SimpleHTTPRequestHandler):
                         try:
                             event = json.loads(line.strip())
                             if event.get("session") == session:
-                                # Filter to thinking/tool events
+                                # Filter to thinking/tool events - expanded to include tool and thinking events
                                 if event.get("event") in ("round", "loop.start", "loop.term", "loop.converged",
                                     "loop.stuck", "loop.blocked_streak", "loop.info_only", "loop.wallclock",
                                     "loop.ollama_error", "loop.max_rounds", "loop.fastpath", "mission.step",
-                                    "stream.token"):
+                                    "stream.token", "tool", "thinking"):
                                     data = json.dumps({
                                         "type": event["event"],
                                         "round": event.get("round"),
@@ -4088,7 +4137,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
                                     self.wfile.flush()
                         except Exception:
                             pass
-                time.sleep(0.5)  # Poll trace file every 500ms
+                time.sleep(0.3)  # Faster polling for more responsive updates
         except (ConnectionError, BrokenPipeError):
             pass  # Client disconnected
 

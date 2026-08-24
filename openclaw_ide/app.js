@@ -512,8 +512,10 @@ function setupLogs() {
 
 async function refreshLog() {
   if (activeLog === "terminal") return;
+  // Map "logs" to actual log file
+  const logFile = activeLog === "logs" ? "PRODUCTION_STATUS.md" : activeLog;
   try {
-    const res = await fetch(`/api/logs/tail?file=${encodeURIComponent(activeLog)}&lines=60`);
+    const res = await fetch(`/api/logs/tail?file=${encodeURIComponent(logFile)}&lines=60`);
     const data = await res.json();
     elLogStream.innerText = data.content || "(Empty log)";
     elLogStream.scrollTop = elLogStream.scrollHeight;
@@ -2078,18 +2080,26 @@ function finalizeStreamingBubble(el) {
 function switchBottomView(view) {
   const logsView = document.getElementById('viewLogs');
   const terminalView = document.getElementById('viewTerminal');
+  const plansView = document.getElementById('viewPlans');
   const logsTab = document.querySelector('[data-view="logs"]');
   const terminalTab = document.querySelector('[data-view="terminal"]');
+  const plansTab = document.querySelector('[data-view="plans"]');
 
   if (logsView) { logsView.classList.remove('active'); logsView.classList.add('hidden'); }
   if (terminalView) { terminalView.classList.remove('active'); terminalView.classList.add('hidden'); }
+  if (plansView) { plansView.classList.remove('active'); plansView.classList.add('hidden'); }
   if (logsTab) logsTab.classList.remove('active');
   if (terminalTab) terminalTab.classList.remove('active');
+  if (plansTab) plansTab.classList.remove('active');
 
   if (view === 'terminal') {
     if (terminalView) { terminalView.classList.add('active'); terminalView.classList.remove('hidden'); }
     if (terminalTab) terminalTab.classList.add('active');
     initTerminalIfNeeded();
+  } else if (view === 'plans') {
+    if (plansView) { plansView.classList.add('active'); plansView.classList.remove('hidden'); }
+    if (plansTab) plansTab.classList.add('active');
+    loadPlanList();
   } else {
     if (logsView) { logsView.classList.add('active'); logsView.classList.remove('hidden'); }
     if (logsTab) logsTab.classList.add('active');
@@ -2144,6 +2154,93 @@ function toggleThinkingPanel() {
   content.style.display = collapsed ? 'block' : 'none';
   if (btn) btn.textContent = collapsed ? '\u25BE' : '\u25B8';
   localStorage.setItem('thinkingPanelCollapsed', String(!collapsed));
+}
+
+// ── Save Plan as File ──────────────────────────────────────────────
+async function saveCurrentPlan() {
+  try {
+    // Get the current plan from the chat messages
+    const bubbles = document.querySelectorAll('.chat-bubble.assistant');
+    let planText = "";
+    for (const bubble of bubbles) {
+      const textEl = bubble.querySelector('.bubble-text');
+      if (textEl && textEl.textContent.includes('Phase')) {
+        planText = textEl.textContent;
+        break;
+      }
+    }
+    
+    if (!planText) {
+      showToast("No plan found in chat. Run a Deep Plan first.", "warning");
+      return;
+    }
+
+    const res = await fetch("/api/plan/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan_text: planText })
+    });
+    
+    const result = await res.json();
+    if (result.ok) {
+      showToast("Plan saved successfully!", "success");
+      loadPlanList(); // Refresh plan list
+    } else {
+      showToast("Failed to save plan: " + (result.error || "Unknown error"), "error");
+    }
+  } catch (e) {
+    showToast("Error saving plan: " + e.message, "error");
+  }
+}
+
+// ── Plan List for Logbox ───────────────────────────────────────────
+async function loadPlanList() {
+  try {
+    const res = await fetch("/api/plan/list");
+    const data = await res.json();
+    renderPlanList(data.plans || []);
+  } catch (e) {
+    console.error("Failed to load plan list:", e);
+  }
+}
+
+function renderPlanList(plans) {
+  const container = document.getElementById("planListContainer");
+  if (!container) return;
+  
+  if (!plans.length) {
+    container.innerHTML = '<div class="loading-state">No saved plans. Click "Save Plan" after a Deep Plan.</div>';
+    return;
+  }
+  
+  container.innerHTML = plans.map(p => `
+    <div class="plan-item" onclick="openPlanFile('${p.filename}')" title="Click to open">
+      <div class="plan-header">
+        <strong>${p.project || p.filename}</strong>
+        <span class="plan-meta">${p.phases_count} phases · ${p.total_estimate_days}d est.</span>
+      </div>
+      <div class="plan-meta">Generated: ${p.generated ? p.generated.split('T')[0] : 'Unknown'}</div>
+    </div>
+  `).join("");
+}
+
+async function openPlanFile(filename) {
+  try {
+    const res = await fetch("/api/plan/read?file=" + encodeURIComponent(filename));
+    const data = await res.json();
+    if (data.ok && data.plan) {
+      // Display plan in the center area (code editor)
+      if (window.monacoEditor) {
+        window.monacoEditor.setValue(JSON.stringify(data.plan, null, 2));
+        window.monacoEditor.getModel().setLanguage('json');
+      }
+      showToast("Plan loaded: " + filename, "success");
+    } else {
+      showToast("Failed to load plan: " + (data.error || "Unknown error"), "error");
+    }
+  } catch (e) {
+    showToast("Error loading plan: " + e.message, "error");
+  }
 }
 
 // ── Tool Action Trigger ────────────────────────────────────────────
