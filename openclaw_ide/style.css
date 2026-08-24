@@ -336,6 +336,7 @@ body {
   padding: 10px 0;
   gap: 12px;
   user-select: none;
+  height: 100%;
 }
 .act-btn {
   background: transparent;
@@ -419,6 +420,7 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
 }
 .sidebar-view {
   display: none;
@@ -828,9 +830,10 @@ body {
 .bottom-panel {
   height: 180px;
   background: var(--green-950);
-  border-top: none;
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 .panel-header {
   height: 30px;
@@ -925,7 +928,7 @@ body {
 
 /* Agent Panel */
 .agent-panel {
-  grid-column: 4;
+  grid-column: 5;
   width: var(--agent-width);
   background: var(--green-950);
   border-left: 1px solid var(--border);
@@ -1137,6 +1140,7 @@ body {
   min-width: 0;
   overflow: hidden;
   border-right: 1px solid var(--border);
+  height: 100%;
 }
 
 /* Thinking Panel */
@@ -1148,14 +1152,6 @@ body {
   min-height: 200px;
   border-bottom: 1px solid var(--border);
   overflow: hidden;
-}
-
-/* Bottom Panel */
-.bottom-panel {
-  height: 200px;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border);
 }
 
 /* Thinking Panel */
@@ -1174,14 +1170,6 @@ body {
   padding: 8px;
   font-family: var(--font-mono);
   font-size: 11px;
-}
-
-/* Bottom Panel */
-.bottom-panel {
-  height: 200px;
-  display: flex;
-  flex-direction: column;
-  border-top: 1px solid var(--border);
 }
 
 @keyframes fadeIn {

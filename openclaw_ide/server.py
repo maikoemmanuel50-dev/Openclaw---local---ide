@@ -2915,13 +2915,18 @@ class IDEHandler(SimpleHTTPRequestHandler):
         elif path == "/api/power":
             self._send_json(get_power_state())
         elif path == "/api/system/network":
+            gw_reachable = is_port_open(18789)
             self._send_json({
                 "online": check_online_status(),
-                "port18789": is_port_open(18789),
+                "port18789": gw_reachable,
                 "port11434": is_port_open(11434),
                 "port49632": is_port_open(49632),
                 "port8765": is_port_open(8765),
                 "blenderRunning": get_native_blender_pid() is not None,
+                "gateway": {
+                    "port": 18789,
+                    "reachable": gw_reachable,
+                },
             })
         elif path == "/api/readiness":
             self._send_json(self.get_readiness())

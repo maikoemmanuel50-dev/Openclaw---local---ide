@@ -478,15 +478,15 @@ function renderPipelineList(renderData) {
 // Logs Viewer & Tail
 function setupLogs() {
   const panelTabs = document.querySelectorAll(".panel-tab");
-  // Set activeLog to the first tab's data-log if not already set
+  // Set activeLog to the first tab's data-view if not already set
   if (!activeLog && panelTabs.length > 0) {
-    activeLog = panelTabs[0].getAttribute("data-log");
+    activeLog = panelTabs[0].getAttribute("data-view");
   }
   panelTabs.forEach(tab => {
     tab.addEventListener("click", () => {
       panelTabs.forEach(t => t.classList.remove("active"));
       tab.classList.add("active");
-      activeLog = tab.getAttribute("data-log");
+      activeLog = tab.getAttribute("data-view");
 
       if (activeLog === "terminal") {
         elLogStream.classList.add("hidden");
@@ -712,7 +712,7 @@ async function updateNetworkStatus() {
     const gatewayVal = document.getElementById("gatewayVal");
     if (data.gateway && gatewayDot && gatewayVal) {
       gatewayDot.className = data.gateway.reachable ? "dot-indicator green" : "dot-indicator red";
-      gatewayVal.innerText = data.gateway.reachable ? "Online" : "Offline";
+      gatewayVal.innerText = data.gateway.reachable ? "Yes" : "No";
     }
   } catch (e) {}
 }
