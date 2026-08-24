@@ -1262,8 +1262,8 @@ def execute_shell_probe(alias):
     
     if alias_l == "disk":
         try:
-            total, used, free = shutil.disk_usage("C:\\")
-            out = f"Drive C:\n  Used: {round(used / (1024**3), 1)} GB\n  Free: {round(free / (1024**3), 1)} GB\n  Total: {round(total / (1024**3), 1)} GB"
+            total, used, free = shutil.disk_usage(str(RENDER_ROOT))
+            out = f"Drive {RENDER_ROOT}\n  Used: {round(used / (1024**3), 1)} GB\n  Free: {round(free / (1024**3), 1)} GB\n  Total: {round(total / (1024**3), 1)} GB"
             return {"ok": True, "alias": alias, "stdout": out, "stderr": ""}
         except Exception:
             pass
@@ -2793,7 +2793,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         ollama = ping_ollama()
         gateway_ok = is_port_open(18789)
         power = get_power_state()
-        disk = shutil.disk_usage("C:\\")
+        disk = shutil.disk_usage(str(RENDER_ROOT))
         
         checks = {
             "ollama": {"ok": ollama.get("online"), "detail": f"{len(ollama.get('models', []))} models available"},
