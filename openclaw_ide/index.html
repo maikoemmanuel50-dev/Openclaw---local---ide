@@ -419,6 +419,35 @@
           <div class="thinking-placeholder">Start a chat to see agent reasoning...</div>
         </div>
       </div>
+      
+      <!-- Log Box (Bottom Panel) -->
+      <div class="bottom-panel" id="bottomPanel">
+        <div class="panel-header">
+          <div class="panel-tabs" id="bottomTabs">
+            <button class="panel-tab active" data-view="logs" onclick="switchBottomView('logs')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+              Log Output
+            </button>
+          </div>
+          <div class="panel-controls">
+            <button class="icon-btn" id="btnRefreshLog" title="Refresh Log">↻</button>
+            <button class="icon-btn" id="btnToggleBottom" title="Collapse Panel">▾</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="view-content active" id="viewLogs">
+            <pre class="log-stream" id="logStreamContent">Loading log stream...</pre>
+            <div class="terminal-box" id="terminalBox">
+              <div class="term-output" id="termOutput">Type PowerShell command or OpenClaw dispatch below...</div>
+              <div class="term-input-row">
+                <span class="term-prompt">></span>
+                <input type="text" id="termInput" placeholder="e.g. python scripts/qwen_local.py ping" />
+                <button id="btnRunTerm">Execute</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
 resizeSidebar" title="Drag to resize sidebar"></div>
