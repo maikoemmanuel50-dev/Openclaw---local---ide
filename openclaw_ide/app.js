@@ -1829,6 +1829,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadReadinessPanel();
   loadProjectPlan();
   setInterval(loadReadinessPanel, 8000);
+  initBottomPanelView();
 });
 
 // ── Sessions Search & History ────────────────────────────────────────
@@ -2032,6 +2033,36 @@ function initThinkingStream(session) {
   };
 }
 
+// ── Bottom Panel View Toggle ────────────────────────────────────────
+function switchBottomView(view) {
+  const reasoningView = document.getElementById('viewReasoning');
+  const logsView = document.getElementById('viewLogs');
+  const reasoningTab = document.querySelector('[data-view="reasoning"]');
+  const logsTab = document.querySelector('[data-view="logs"]');
+  
+  if (view === 'reasoning') {
+    document.getElementById('viewReasoning').classList.add('active');
+    document.getElementById('viewReasoning').classList.remove('hidden');
+    document.getElementById('viewLogs').classList.add('hidden');
+    document.getElementById('viewLogs').classList.remove('active');
+    document.querySelector('[data-view="reasoning"]').classList.add('active');
+    document.querySelector('[data-view="logs"]').classList.remove('active');
+  } else {
+    document.getElementById('viewLogs').classList.add('active');
+    document.getElementById('viewLogs').classList.remove('hidden');
+    document.getElementById('viewReasoning').classList.add('hidden');
+    document.getElementById('viewReasoning').classList.remove('active');
+    document.querySelector('[data-view="logs"]').classList.add('active');
+    document.querySelector('[data-view="reasoning"]').classList.remove('active');
+  }
+  localStorage.setItem('bottomPanelView', view);
+}
+
+function initBottomPanelView() {
+  const savedView = localStorage.getItem('bottomPanelView') || 'reasoning';
+  switchBottomView(savedView);
+}
+
 function appendThinkingEvent(data) {
   const content = document.getElementById("thinkingContent");
   if (!content) return;
@@ -2097,43 +2128,4 @@ function initThinkingStream(session) {
   };
 }
 
-function appendThinkingEvent(data) {
-  const content = document.getElementById("thinkingContent");
-  if (!content) return;
-  
-  // Remove placeholder on first event
-  if (content.querySelector(".thinking-placeholder")) {
-    content.innerHTML = "";
-  }
-  
-  const div = document.createElement("div");
-  div.className = `thinking-event thinking-${data.type}`;
-  
-  const icons = { thinking: "💭", round: "🧠", tool: "🔧", "loop.start": "🚀" };
-  const icon = icons[data.type] || "•";
-  
-  let html = `<span class="thinking-icon">${icon}</span>`;
-  html += `<span class="thinking-time">${data.ts || ""}</span>`;
-  
-  if (data.type === "round" && data.model_text) {
-    html += `<span class="thinking-text">${esc(data.model_text)}</span>`;
-  } else if (data.type === "tool" && data.tools) {
-    data.tools.forEach(t => {
-      html += `<div class="thinking-tool">${t.name}: ${t.args ? JSON.stringify(t.args).slice(0, 80) : ""}</div>`;
-    });
-  } else if (data.type === "loop.start") {
-    html += `<span class="thinking-text">Starting agent loop...</span>`;
-  }
-  
-  div.innerHTML = html;
-  content.appendChild(div);
-  content.scrollTop = content.scrollHeight;
-}
 
-// Add to DOMContentLoaded init
-document.addEventListener("DOMContentLoaded", () => {
-  // ... existing init code ...
-  loadReadinessPanel();
-  loadProjectPlan();
-  setInterval(loadReadinessPanel, 8000);
-});

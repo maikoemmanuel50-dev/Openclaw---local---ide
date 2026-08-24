@@ -1008,7 +1008,7 @@ body {
   height: 8px;
   color: var(--success);
 }
-}
+
 .badge-status-offline {
   background: rgba(244, 63, 94, 0.15);
   color: var(--accent-rose);
@@ -1939,7 +1939,53 @@ audio { display: block; }
   color: #374151;
 }
 
-/* Session Detail Modal */
+/* Bottom Panel View Toggle */
+.view-content {
+  height: 100%;
+  overflow: auto;
+  display: none;
+}
+
+.view-content.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.view-content.hidden {
+  display: none !important;
+}
+
+/* Bottom Panel Tabs */
+#bottomTabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  font-size: 11px;
+}
+
+#bottomTabs .panel-tab {
+  flex: 1;
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+#bottomTabs .panel-tab:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+
+#bottomTabs .panel-tab.active {
+  background: var(--gold-100);
+  color: var(--text-primary);
+  font-weight: 700;
+}
 .session-detail-modal {
   position: fixed;
   inset: 0;
