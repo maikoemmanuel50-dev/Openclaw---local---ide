@@ -292,6 +292,220 @@ if not AGENT_TRACE_PATH.exists():
     AGENT_TRACE_PATH.touch()
 
 
+# ── Reference Plans for Deep Plan Mode ──────────────────────────────
+REFERENCE_PLANS_PATH = IDE_ROOT / "reference_plans.json"
+REFERENCE_PLANS = []
+if REFERENCE_PLANS_PATH.exists():
+    try:
+        with open(REFERENCE_PLANS_PATH, "r", encoding="utf-8") as f:
+            REFERENCE_PLANS = json.load(f).get("plans", [])
+    except Exception:
+        pass
+
+VALID_PLAN_ACTIONS = {
+    "render_all_scenes", "render_mp4", "assemble_final",
+    "assemble_with_audio", "assemble_kinetic_preview",
+    "render_4k", "run_1080_then_4k", "brainstorm",
+    "ping_qwen", "qwen_chat",
+}
+
+ACTION_ALTERNATIVES = {
+    "start_shooting": "render_all_scenes",
+    "edit_video": "assemble_final",
+    "color_grade": "assemble_with_audio",
+    "mix_audio": "assemble_with_audio",
+    "export_video": "assemble_final",
+    "render": "render_mp4",
+    "assemble": "assemble_final",
+    "brainstorm_concept": "brainstorm",
+    "generate_script": "brainstorm",
+    "create_storyboard": "brainstorm",
+}
+
+def validate_and_fix_plan(plan_json):
+    """Validate plan actions and auto-replace invalid ones with valid alternatives."""
+    fixed = False
+    issues = []
+    for phase in plan_json.get("phases", []):
+        for task in phase.get("tasks", []):
+            action = task.get("action", "")
+            if action and action not in VALID_PLAN_ACTIONS:
+                replacement = ACTION_ALTERNATIVES.get(action)
+                if replacement:
+                    task["action"] = replacement
+                    task["action_note"] = f"Auto-replaced '{action}' -> '{replacement}'"
+                    issues.append(f"Task {task.get('id')}: {action} -> {replacement}")
+                    fixed = True
+                else:
+                    task.pop("action", None)
+                    task["action_note"] = f"Removed invalid action '{action}'"
+                    issues.append(f"Task {task.get('id')}: removed {action}")
+                    fixed = True
+    return plan_json, fixed, issues
+
+
+def self_evaluate_plan(plan_json, project_state=None):
+    """Score a plan's quality and return issues/suggestions."""
+    score = 100
+    issues = []
+    suggestions = []
+
+    phases = plan_json.get("phases", [])
+    if not phases:
+        score -= 30
+        issues.append("No phases defined")
+
+    for phase in phases:
+        tasks = phase.get("tasks", [])
+        if not tasks:
+            score -= 15
+            issues.append(f"Phase '{phase.get('name')}' has no tasks")
+
+    for phase in phases:
+        for task in phase.get("tasks", []):
+            action = task.get("action", "")
+            if action and action not in VALID_PLAN_ACTIONS:
+                score -= 10
+                issues.append(f"Task {task.get('id')}: invalid action '{action}'")
+
+    all_task_ids = {"kickoff"}
+    for phase in phases:
+        for task in phase.get("tasks", []):
+            all_task_ids.add(task.get("id", ""))
+    for phase in phases:
+        for task in phase.get("tasks", []):
+            for dep in task.get("depends_on", []):
+                if dep not in all_task_ids:
+                    score -= 5
+                    issues.append(f"Task {task.get('id')}: depends on unknown '{dep}'")
+
+    total_hrs = sum(
+        t.get("estimate_hrs", 0)
+        for phase in phases
+        for t in phase.get("tasks", [])
+    )
+    total_days = plan_json.get("total_estimate_days", 0)
+    if total_hrs > 0 and total_days > 0:
+        implied_days = total_hrs / 8
+        if abs(implied_days - total_days) > 2:
+            suggestions.append(f"Time mismatch: {total_hrs}hrs ~ {implied_days:.1f} days, but plan says {total_days} days")
+
+    for phase in phases:
+        for task in phase.get("tasks", []):
+            if not task.get("deliverable"):
+                score -= 5
+                suggestions.append(f"Task {task.get('id')}: no deliverable specified")
+
+    quality = "excellent" if score >= 90 else "good" if score >= 70 else "needs_work" if score >= 50 else "poor"
+
+    return {
+        "score": score,
+        "quality": quality,
+        "issues": issues,
+        "suggestions": suggestions,
+        "total_task_hours": total_hrs,
+        "total_plan_days": total_days,
+    }
+
+
+def execute_mission_with_feedback(plan_json, session):
+    """Execute plan steps with feedback loop — adapt if a step fails."""
+    results = []
+    adapted_plan = json.loads(json.dumps(plan_json))  # Deep copy
+
+    for phase in adapted_plan.get("phases", []):
+        for task in phase.get("tasks", []):
+            action = task.get("action", "")
+            if not action:
+                continue
+
+            # Execute the action
+            if action in EXEC_ACTIONS:
+                result = execute_action(action, task.get("action_params", {}))
+            else:
+                result = dispatch_tool(action, task.get("action_params", {}))
+
+            if result.get("ok"):
+                results.append({"task": task["id"], "status": "success", "result": result})
+            else:
+                # FAILED — try to adapt
+                results.append({"task": task["id"], "status": "failed", "result": result})
+
+                # Log the failure for the model to adapt
+                trace_agent({
+                    "event": "mission.adapt",
+                    "session": session,
+                    "failed_task": task["id"],
+                    "failed_action": action,
+                    "error": result.get("error", ""),
+                    "suggestion": f"Task {task['id']} failed. Consider alternative approach.",
+                })
+
+                # If action failed, try alternative
+                alt = ACTION_ALTERNATIVES.get(action)
+                if alt and alt != action and alt in EXEC_ACTIONS:
+                    trace_agent({
+                        "event": "mission.retry_alt",
+                        "session": session,
+                        "original": action,
+                        "alternative": alt,
+                    })
+                    alt_result = execute_action(alt, task.get("action_params", {}))
+                    results.append({"task": task["id"], "status": "retry", "action": alt, "result": alt_result})
+
+    return results
+
+
+# ── Cross-Session Memory ────────────────────────────────────────────
+SESSION_MEMORY_PATH = IDE_ROOT / ".session_memory.json"
+
+def load_session_memory():
+    """Load persistent session memory."""
+    if SESSION_MEMORY_PATH.exists():
+        try:
+            with open(SESSION_MEMORY_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"projects": {}, "preferences": {}, "history": []}
+
+def save_session_memory(memory):
+    """Save session memory to disk."""
+    try:
+        with open(SESSION_MEMORY_PATH, "w", encoding="utf-8") as f:
+            json.dump(memory, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+def remember_project(session_id, project_info):
+    """Remember project details across sessions."""
+    memory = load_session_memory()
+    memory["projects"][session_id] = {
+        "name": project_info.get("name", ""),
+        "type": project_info.get("type", ""),
+        "details": project_info.get("details", {}),
+        "plan": project_info.get("plan"),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+    # Keep last 50 projects
+    keys = list(memory["projects"].keys())
+    if len(keys) > 50:
+        for k in keys[:len(keys) - 50]:
+            del memory["projects"][k]
+    save_session_memory(memory)
+
+def remember_preference(key, value):
+    """Remember user preferences."""
+    memory = load_session_memory()
+    memory["preferences"][key] = value
+    save_session_memory(memory)
+
+def get_remembered_projects():
+    """Get all remembered projects for context."""
+    memory = load_session_memory()
+    return memory.get("projects", {})
+
+
 def trace_agent(entry):
     """Append one agent-loop trace record (round, tool, error, outcome)."""
     try:
@@ -867,60 +1081,97 @@ def apply_power_action(action, payload=None):
 
 
 def get_render_progress():
-    """Auto-discover scenes from disk and return render progress."""
-    masters_dir = RENDER_ROOT / "video_clips" / "masters"
-    mp4_dir = RENDER_ROOT / "video_clips"
-    
-    # Auto-discover scenes from disk
-    scenes_config = PROJECT_CONFIG.get("scenes", [])
-    
-    if not scenes_config and masters_dir.exists():
-        # Discover from disk if no config
-        scene_dirs = sorted([d for d in masters_dir.iterdir() if d.is_dir()])
-        scenes_config = [{"id": d.name, "targetFrames": 1000} for d in scene_dirs]
-    elif not scenes_config:
-        scenes_config = []
-    
-    results = []
-    ready_count = 0
-    
-    for scene in scenes_config:
-        scene_id = scene.get("id", "")
-        target = scene.get("targetFrames", 1000)
-        
-        s_dir = masters_dir / scene_id
-        png_count = len(list(s_dir.glob("*.png"))) if s_dir.exists() else 0
-        mp4_path = mp4_dir / f"{scene_id}.mp4"
-        is_ready = mp4_path.exists() and mp4_path.stat().st_size > 100000
-        if is_ready:
-            ready_count += 1
-        
-        pct = min(100.0, (png_count / target) * 100.0) if not is_ready else 100.0
-        
-        results.append({
-            "name": scene_id,
-            "frames": png_count,
-            "target": target,
-            "percent": round(pct, 1),
-            "isReady": is_ready,
-            "mp4Size": mp4_path.stat().st_size if mp4_path.exists() else 0
+    """Query ACTUAL project state from filesystem — not cached/generic data."""
+    scenes_dir = RENDER_ROOT / "video_clips"
+    masters_dir = scenes_dir / "masters" if scenes_dir.exists() else None
+    final_dir = RENDER_ROOT / "final"
+
+    # Count actual scene folders
+    scene_folders = []
+    if scenes_dir.exists():
+        scene_folders = sorted([d for d in scenes_dir.iterdir() if d.is_dir()])
+
+    # Check for rendered frames in each scene
+    rendered_scenes = []
+    pending_scenes = []
+    scene_details = []
+    for scene in scene_folders:
+        frames = list(scene.glob("*.png")) if scene.exists() else []
+        mp4s = list(scene.glob("*.mp4")) if scene.exists() else []
+        frame_count = len(frames)
+        mp4_count = len(mp4s)
+        status = "rendered" if frame_count >= 100 or mp4_count > 0 else "pending"
+        if status == "rendered":
+            rendered_scenes.append(scene.name)
+        else:
+            pending_scenes.append(scene.name)
+        scene_details.append({
+            "name": scene.name,
+            "status": status,
+            "frames": frame_count,
+            "mp4s": mp4_count,
         })
-    
-    # Check Blender process via fast native toolhelp snapshot
+
+    # Check Blender process
     blender_pid = get_native_blender_pid()
-    blender_running = blender_pid is not None
+
+    # Check for assembled final videos
+    final_videos = list(final_dir.glob("*.mp4")) if final_dir.exists() else []
+
+    # Check for audio assets
+    audio_dir = WORKSPACE_ROOT / "assets" / "audio"
+    audio_files = list(audio_dir.glob("*.mp3")) + list(audio_dir.glob("*.wav")) if audio_dir.exists() else []
+
+    # Check for masters
+    masters_count = len(list(masters_dir.glob("*.png"))) if masters_dir and masters_dir.exists() else 0
+
+    # Disk space on render drive
+    try:
+        total, used, free = shutil.disk_usage(str(RENDER_ROOT))
+        disk_info = {
+            "total_gb": round(total / (1024**3), 1),
+            "used_gb": round(used / (1024**3), 1),
+            "free_gb": round(free / (1024**3), 1),
+        }
+    except Exception:
+        disk_info = {"total_gb": 0, "used_gb": 0, "free_gb": 0}
 
     return {
-        "scenes": results,
-        "readyCount": ready_count,
-        "totalScenes": len(results),
-        "blenderRunning": blender_running,
+        "totalScenes": len(scene_folders),
+        "renderedScenes": len(rendered_scenes),
+        "pendingScenes": len(pending_scenes),
+        "readyCount": len(rendered_scenes),
+        "sceneDetails": scene_details,
+        "rendered": rendered_scenes,
+        "pending": pending_scenes,
+        "blenderRunning": blender_pid is not None,
         "blenderPid": blender_pid,
+        "finalVideos": [v.name for v in final_videos],
+        "mastersFrameCount": masters_count,
+        "audioFiles": [a.name for a in audio_files[:20]],
+        "disk": disk_info,
+        "renderRoot": str(RENDER_ROOT),
         "projectName": PROJECT_CONFIG.get("name", ""),
         "episodeName": PROJECT_CONFIG.get("episode", ""),
         "gates": PROJECT_CONFIG.get("gates", {}),
         "logFiles": PROJECT_CONFIG.get("logFiles", []),
-        "resolution": PROJECT_CONFIG.get("delivery", {}).get("resolution", "1080p")
+        "resolution": PROJECT_CONFIG.get("delivery", {}).get("resolution", "1080p"),
+    }
+
+
+def get_project_state():
+    """Full project state for agentic planning — real filesystem data."""
+    render = get_render_progress()
+    config = PROJECT_CONFIG.copy()
+    config.pop("scenes", None)  # too large
+    return {
+        "project": config.get("name", "Unknown"),
+        "render_root": str(RENDER_ROOT),
+        "render": render,
+        "gates": config.get("gates", {}),
+        "delivery": config.get("delivery", {}),
+        "tools": config.get("tools", {}),
+        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }
 
 
@@ -1085,6 +1336,24 @@ EXEC_ACTIONS = {
         "terminal": True,
     },
 }
+
+# Actions that auto-execute without user approval (read-only / safe)
+AUTO_EXECUTE_ACTIONS = {
+    "ping_qwen",
+    "production_status",
+    "get_project_state",
+    "disk",
+    "blender process",
+    "port 18789",
+    "port 11434",
+    "renders list",
+    "masters pngs",
+    "network status",
+}
+
+def is_auto_executable(action_name):
+    """Check if an action can run without user approval."""
+    return action_name in AUTO_EXECUTE_ACTIONS
 
 # Read-only shell allowlist: patterns the model may run freely.
 ALLOWED_SHELL_PATTERNS = [
@@ -1453,6 +1722,15 @@ AGENT_TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "get_project_state",
+            "description": "Get full project state for agentic planning: project name, render root, scene details (rendered/pending), Blender status, final videos, audio assets, disk space, gates, delivery config. ALWAYS call this FIRST before creating any plan.",
+            "parameters": {"type": "object", "properties": {}},
+            "category": "status",
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "read_log",
             "description": "Read the tail of a production log. Logs: project config logFiles + PRODUCTION_STATUS.md, STATUS_LIVE_DELIVERY.txt, STATUS_POWER_CHECKPOINT.txt, arch_comm_iv_lock_log.txt.",
             "parameters": {
@@ -1565,6 +1843,8 @@ AGENT_TOOLS = [
 def dispatch_tool(name, args):
     if name == "production_status":
         return {"status": get_render_progress(), "battery": get_battery_info()}
+    if name == "get_project_state":
+        return get_project_state()
     if name == "read_log":
         return read_log_tail(args.get("log", "wait_hq_assemble_log.txt"), int(args.get("lines", 30)))
     if name == "run_action":
@@ -2154,50 +2434,68 @@ PLANNER_PROMPT = (
 
 
 DEEP_PLAN_PROMPT = (
-    "You are a production planning specialist. Create comprehensive, actionable plans "
-    "for video production projects using available tools to gather context.\n\n"
-    "OUTPUT FORMAT:\n"
-    "1. Structured Markdown with phases, tasks, dependencies, estimates\n"
-    "2. A JSON block at the end for programmatic handoff (mission mode, CI/CD)\n\n"
-    "TOOLS AVAILABLE (use to gather context before planning):\n"
-    "- production_status: live render progress, Blender state, power\n"
-    "- read_log: production logs (config logFiles + PRODUCTION_STATUS.md, STATUS_LIVE_DELIVERY.txt, etc.)\n"
-    "- shell_probe: read-only system probes (disk, blender process, ports)\n"
-    "- copyright_check: assess brand/stock/generated content risk\n"
-    "- brainstorm: creative ideation for concepts, scripts, series ideas\n\n"
-    "TOOLS NOT AVAILABLE (execution tools are filtered out):\n"
-    "- run_action, escalate_openclaw, inspect_image\n\n"
-    "PLANNING METHODOLOGY:\n"
-    "1. GATHER CONTEXT: call production_status, read_log, shell_probe to understand current state\n"
-    "2. DEFINE PHASES: Pre-Production, Production, Post-Production, Delivery\n"
-    "3. BREAK INTO TASKS: each with clear deliverable, dependencies, estimate (hrs/days)\n"
-    "4. IDENTIFY GATES: 4K HOLD, one GPU job max, CPU-while-GPU block\n"
-    "5. ESTIMATE EFFORT: hours per task, total days, critical path\n\n"
-    "GATE AWARENESS:\n"
-    "- 4K HOLD: no 4K renders until 1080p delivery complete\n"
-    "- ONE GPU JOB: never start second Blender render while one is active\n"
-    "- CPU-WHILE-GPU: no heavy ffmpeg assembly during active GPU render\n\n"
-    "OUTPUT EXAMPLE:\n"
-    "# Video Production Plan: Project Name\n"
-    "## Phase 1: Pre-Production (5 days)\n"
-    "- Task 1.1: Concept Brief [depends: kickoff] [deliverable: docs/concept.md] [estimate: 4h]\n"
-    "- Task 1.2: Script Outline [depends: 1.1] [deliverable: scripts/outline.md] [estimate: 6h]\n"
-    "## Phase 2: Production (10 days)\n"
-    "...\n\n"
+    "You are an expert video production planner for the OpenClaw Local IDE.\n\n"
+    "CRITICAL RULES:\n"
+    "1. ALWAYS call get_project_state FIRST to understand current project state.\n"
+    "2. NEVER ask the user questions — use tools to gather all context.\n"
+    "3. ONLY use actions from this list: render_all_scenes, render_mp4, assemble_final, assemble_with_audio, assemble_kinetic_preview, render_4k, run_1080_then_4k, brainstorm, ping_qwen, qwen_chat\n"
+    "4. Plans must be immediately actionable with existing tools.\n"
+    "5. Estimate time based on actual render complexity, not generic placeholders.\n"
+    "6. Reference the example plans below for structure and quality.\n"
+    "7. Adapt the plan to the user's specific project details.\n\n"
+    "REFERENCE EXAMPLES (learn structure and quality from these):\n\n"
+    "### Example 1: Documentary Short Film\n"
+    "Description: 30-min interview-based documentary with B-roll footage\n"
     "```json\n"
+    + json.dumps(REFERENCE_PLANS[0]["plan"], indent=2) if REFERENCE_PLANS else '{"note": "No reference plans loaded"}' + "\n"
+    "```\n\n"
+    "### Example 2: 2D Animated Short Film\n"
+    "Description: 5-minute hand-drawn style animated short\n"
+    "```json\n"
+    + json.dumps(REFERENCE_PLANS[1]["plan"], indent=2) if len(REFERENCE_PLANS) > 1 else '{"note": "No reference plans loaded"}' + "\n"
+    "```\n\n"
+    "### Example 3: 3D Animated Commercial\n"
+    "Description: 60-second product visualization with photorealistic rendering\n"
+    "```json\n"
+    + json.dumps(REFERENCE_PLANS[2]["plan"], indent=2) if len(REFERENCE_PLANS) > 2 else '{"note": "No reference plans loaded"}' + "\n"
+    "```\n\n"
+    "OUTPUT FORMAT:\n"
+    "Return a JSON object with this exact structure:\n"
     "{\n"
     "  \"project\": \"Project Name\",\n"
     "  \"phases\": [\n"
-    "    {\"id\": 1, \"name\": \"Pre-Production\", \"days\": 5, \"tasks\": [\n"
-    "      {\"id\": \"1.1\", \"name\": \"Concept Brief\", \"depends_on\": [\"kickoff\"], \"deliverable\": \"docs/concept.md\", \"estimate_hrs\": 4},\n"
-    "      {\"id\": \"1.2\", \"name\": \"Script Outline\", \"depends_on\": [\"1.1\"], \"deliverable\": \"scripts/outline.md\", \"estimate_hrs\": 6}\n"
-    "    ]}\n"
+    "    {\n"
+    "      \"id\": 1,\n"
+    "      \"name\": \"Phase Name\",\n"
+    "      \"days\": 2,\n"
+    "      \"tasks\": [\n"
+    "        {\n"
+    "          \"id\": \"1.1\",\n"
+    "          \"name\": \"Task Name\",\n"
+    "          \"depends_on\": [\"kickoff\"],\n"
+    "          \"deliverable\": \"path/to/deliverable\",\n"
+    "          \"estimate_hrs\": 4,\n"
+    "          \"action\": \"render_all_scenes\",\n"
+    "          \"action_params\": {\"key\": \"value\"}\n"
+    "        }\n"
+    "      ]\n"
+    "    }\n"
     "  ],\n"
-    "  \"total_estimate_days\": 15,\n"
-    "  \"gates\": [\"4K HOLD\", \"one GPU job\"],\n"
+    "  \"total_estimate_days\": 5,\n"
+    "  \"gates\": [\"4K HOLD\"],\n"
     "  \"handoff_ready\": true\n"
-    "}\n"
-    "```"
+    "}\n\n"
+    "BAD EXAMPLE (DO NOT DO THIS):\n"
+    "- Using actions like 'start_shooting', 'edit_video', 'color_grade' — these don't exist\n"
+    "- Asking the user questions instead of calling tools\n"
+    "- Generic time estimates not based on actual render complexity\n"
+    "- No dependency chain between tasks\n\n"
+    "GOOD EXAMPLE (DO THIS):\n"
+    "- Use only valid actions from the list above\n"
+    "- Call get_project_state first to gather context\n"
+    "- Create clear dependency chains (kickoff -> 1.1 -> 1.2 -> 2.1)\n"
+    "- Specify deliverables with file paths\n"
+    "- Estimate time based on render complexity (1080p scenes: 2-4hrs each, 4K: 4-8hrs each)\n"
 )
 
 
@@ -3157,6 +3455,15 @@ class IDEHandler(SimpleHTTPRequestHandler):
         trace_agent({"event": "loop.start", "model": model, "session": session,
                      "prompt": str(messages[1].get("content", ""))[:300] if len(messages) > 1 else ""})
         
+        # Inject cross-session memory context
+        memory = load_session_memory()
+        recent_projects = list(memory.get("projects", {}).values())[-5:]
+        if recent_projects:
+            context_note = "\n\nREMEMBERED CONTEXT from previous sessions:\n"
+            for p in recent_projects:
+                context_note += f"- Project: {p.get('name', 'Unknown')} ({p.get('type', 'unknown')}) — {p.get('timestamp', '')}\n"
+            messages.insert(0, {"role": "system", "content": context_note})
+        
         # Planning-only mode: if user explicitly says "plan only", "do not execute", etc.,
         # OR if mode is "deep_plan", remove execution tools from available set
         user_prompt = str(messages[1].get("content", "")).lower() if len(messages) > 1 else ""
@@ -3164,6 +3471,21 @@ class IDEHandler(SimpleHTTPRequestHandler):
             "plan only", "do not execute", "hold execution", "just plan", 
             "don't execute", "only plan", "no execution", "no execute",
         ))
+        
+        # Force tool usage in deep_plan mode: inject project state
+        if mode == "deep_plan":
+            project_state = get_project_state()
+            state_json = json.dumps(project_state, indent=2, default=str)
+            messages.insert(1, {
+                "role": "system",
+                "content": (
+                    f"MANDATORY FIRST STEP: You MUST call get_project_state to understand the current project. "
+                    f"Do NOT ask the user any questions. Use tools to gather all context. "
+                    f"Here is the current project state for your reference:\n\n{state_json}\n\n"
+                    f"Now create a detailed, actionable plan using ONLY valid actions. "
+                    f"Reference the example plans in your system prompt for structure."
+                )
+            })
         
         for round_i in range(max_rounds):
             # Wall-clock guard: stop when budget spent, even with rounds left
@@ -3180,7 +3502,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
             # Filter out single-shot status tools if already called in earlier rounds
             filtered_tools = [
                 t for t in AGENT_TOOLS
-                if not (t.get("function", {}).get("name") == "production_status" and "production_status" in all_tools_called)
+                if not (
+                    (t.get("function", {}).get("name") == "production_status" and "production_status" in all_tools_called)
+                    or (t.get("function", {}).get("name") == "get_project_state" and "get_project_state" in all_tools_called)
+                )
             ]
             
             # Planning-only: remove execution tools
@@ -3244,6 +3569,42 @@ class IDEHandler(SimpleHTTPRequestHandler):
             last_content = clean_content or last_content
             if clean_content:
                 best_text = clean_content
+
+            # Model escalation: check if 7b is struggling
+            ESCALATION_TRIGGERS = [
+                "i don't know", "i cannot", "i'm not sure", "i don't have access",
+                "i don't have enough", "could you please provide", "can you tell me",
+                "what is your", "please provide", "i need more information",
+                "i'm unable to", "i do not have",
+            ]
+            if mode == "deep_plan" and model == _CODER_MODEL_7B:
+                lower_content = clean_content.lower()
+                is_struggling = any(t in lower_content for t in ESCALATION_TRIGGERS)
+                if is_struggling:
+                    retries = getattr(self, '_deep_plan_retries', {}).get(session, 0)
+                    if retries < 2:
+                        retries += 1
+                        if not hasattr(self, '_deep_plan_retries'):
+                            self._deep_plan_retries = {}
+                        self._deep_plan_retries[session] = retries
+                        trace_agent({
+                            "event": "plan.retry",
+                            "session": session,
+                            "attempt": retries,
+                            "reason": "7b model struggling",
+                            "response_snippet": clean_content[:200],
+                        })
+                    elif retries >= 2:
+                        model = _CODER_MODEL  # Escalate to 14b
+                        trace_agent({
+                            "event": "plan.escalate",
+                            "session": session,
+                            "from_model": _CODER_MODEL_7B,
+                            "to_model": _CODER_MODEL,
+                            "reason": "7b failed after 2 retries",
+                        })
+                        if hasattr(self, '_deep_plan_retries'):
+                            self._deep_plan_retries[session] = 0
             msg = dict(msg)
             msg["content"] = clean_content
             messages.append(msg)
@@ -3523,7 +3884,30 @@ class IDEHandler(SimpleHTTPRequestHandler):
         if not plan_json:
             self._send_json({"ok": False, "error": "No valid JSON block found in plan"}, 400)
             return
+
+        # Validate and auto-fix invalid actions
+        plan_json, was_fixed, issues = validate_and_fix_plan(plan_json)
+        if was_fixed:
+            trace_agent({
+                "event": "plan.fixed",
+                "session": payload.get("session", ""),
+                "issues": issues,
+            })
+
+        # Self-evaluate plan quality
+        evaluation = self_evaluate_plan(plan_json)
+        if evaluation["score"] < 70:
+            trace_agent({
+                "event": "plan.low_quality",
+                "session": payload.get("session", ""),
+                "score": evaluation["score"],
+                "quality": evaluation["quality"],
+                "issues": evaluation["issues"],
+            })
+
         result = save_plan_to_project(plan_json)
+        result["evaluation"] = evaluation
+        result["validation_issues"] = issues if was_fixed else []
         self._send_json(result)
 
     def handle_search_sessions(self, query):

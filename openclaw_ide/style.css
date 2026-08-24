@@ -309,14 +309,21 @@ body {
   background: var(--gold-500);
 }
 
-/* IDE Container - CSS Grid Layout */
+/* IDE Container - 5-column CSS Grid Layout (with resize handle) */
 .ide-container {
   display: grid;
-  grid-template-columns: var(--activity-width) var(--sidebar-width) 1fr var(--agent-width);
+  grid-template-columns: var(--activity-width) var(--sidebar-width) 1fr 5px var(--agent-width);
   grid-template-rows: 1fr;
   height: calc(100vh - var(--header-height) - var(--footer-height));
   overflow: hidden;
 }
+
+/* Grid column assignments */
+.activity-bar { grid-column: 1; }
+.sidebar-drawer { grid-column: 2; }
+.center-area { grid-column: 3; }
+.resize-handle.resize-v { grid-column: 4; width: 5px; }
+.agent-panel { grid-column: 5; }
 
 /* Activity Bar — darkest teal */
 .activity-bar {
