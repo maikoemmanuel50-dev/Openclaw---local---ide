@@ -1977,8 +1977,20 @@ def _format_tool_summary(results):
                 parts.append(f"**Visual QC `{res.get('image')}`**\n{res.get('description', '')}")
             else:
                 parts.append(f"inspect_image: {res.get('error')}")
+        elif name == "brainstorm":
+            reply = res.get("reply", "")
+            topic = res.get("topic", "")
+            if reply:
+                parts.append(f"**Brainstorm: {topic}**\n\n{reply[:2000]}")
+            else:
+                parts.append(f"Brainstorm completed for: {topic}")
         else:
-            parts.append(f"- `{name}`: {json.dumps(res, default=str)[:2000]}")
+            # Format as readable text, not JSON
+            if res.get("ok"):
+                output = res.get("output") or res.get("reply") or res.get("stdout") or ""
+                parts.append(f"**{name}**\n{str(output)[:2000]}")
+            else:
+                parts.append(f"{name}: {res.get('error', 'unknown error')}")
     return "\n\n".join(parts)
 
 
@@ -3669,11 +3681,12 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 else:
                     blocked_streak = 0
 
+                # Format tool result as readable text (not JSON) for the model
                 try:
-                    result_json = json.dumps(tool_result, default=str)
+                    result_text = humanize_tool_result(name, tool_result)
                 except Exception:
-                    result_json = str(tool_result)[:4000]
-                messages.append({"role": "tool", "content": result_json})
+                    result_text = str(tool_result)[:4000]
+                messages.append({"role": "tool", "content": result_text})
 
             # Rich per-round trajectory record: model reasoning + every tool
             # call with its argument summary and outcome status.

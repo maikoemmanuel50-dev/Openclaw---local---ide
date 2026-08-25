@@ -1117,6 +1117,12 @@ function updateChatBubble(id, newText) {
 }
 
 function formatChatText(t) {
+  // Fix double-encoded text: convert literal \n sequences to actual newlines
+  // and decode Unicode escapes like \u2019 (apostrophe)
+  t = t.replace(/\\n/g, "\n")
+       .replace(/\\t/g, "\t")
+       .replace(/\\u([0-9a-fA-F]{4})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+  
   // Parse code blocks ```lang\ncode\n``` into executable Action Cards
   const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
   let formatted = t.replace(codeBlockRegex, (match, lang, code) => {
