@@ -59,8 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initAudioPanel();
   updateNetworkStatus();
 
-  // Polling loop every 8 seconds (status + logs; trajectory has its own
-  // slower cadence below — 3.5s hammered the local server under chat load).
+  // Consolidated polling loop every 15 seconds (reduced from 3 separate 8s intervals)
   setInterval(() => {
     refreshSystemStatus();
     refreshCrestodian();
@@ -68,10 +67,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (activeLog !== "terminal") {
       refreshLog();
     }
-  }, 8000);
-  setInterval(() => {
     loadTrajectory();
-  }, 8000);
+  }, 15000);
 });
 
 // Toast System
@@ -151,7 +148,7 @@ function renderFileTree(files) {
       const activeClass = f.path === activeFilePath ? "active" : "";
       const icon = getFileIcon(f.name);
       html += `
-        <div class="tree-item ${activeClass}" onclick="openFile('${f.path}')">
+        <div class="tree-item ${activeClass}" data-path="${escapeHtml(f.path)}">
           <span class="file-icon">${icon}</span>
           <span class="file-name">${f.name}</span>
         </div>
@@ -159,6 +156,14 @@ function renderFileTree(files) {
     });
   }
   elFileTree.innerHTML = html;
+  
+  // Event delegation for file tree clicks (XSS-safe)
+  elFileTree.onclick = (e) => {
+    const item = e.target.closest('.tree-item');
+    if (item && item.dataset.path) {
+      openFile(item.dataset.path);
+    }
+  };
 }
 
 function getFileIcon(filename) {
@@ -215,14 +220,27 @@ function renderTabs() {
     const name = f.split("/").pop();
     const icon = getFileIcon(name);
     html += `
-      <div class="editor-tab ${activeClass}" onclick="openFile('${f}')">
+      <div class="editor-tab ${activeClass}" data-path="${escapeHtml(f)}">
         <span class="tab-icon">${icon}</span>
         <span class="tab-title">${name}</span>
-        <span class="tab-close" onclick="closeTab('${f}', event)">×</span>
+        <span class="tab-close" data-close="${escapeHtml(f)}">×</span>
       </div>
     `;
   });
   elTabsBar.innerHTML = html;
+  
+  // Event delegation for tab clicks (XSS-safe)
+  elTabsBar.onclick = (e) => {
+    const closeBtn = e.target.closest('.tab-close');
+    if (closeBtn && closeBtn.dataset.close) {
+      closeTab(closeBtn.dataset.close, e);
+      return;
+    }
+    const tab = e.target.closest('.editor-tab');
+    if (tab && tab.dataset.path) {
+      openFile(tab.dataset.path);
+    }
+  };
 }
 
 function closeTab(path, e) {
@@ -515,12 +533,22 @@ async function refreshLog() {
   // Map "logs" to actual log file
   const logFile = activeLog === "logs" ? "PRODUCTION_STATUS.md" : activeLog;
   try {
+    console.log(`[Log Fetch] Requesting: /api/logs/tail?file=${logFile}`);
     const res = await fetch(`/api/logs/tail?file=${encodeURIComponent(logFile)}&lines=60`);
+    
+    if (!res.ok) {
+      console.error(`[Log Fetch] HTTP ${res.status}: ${res.statusText}`);
+      elLogStream.innerText = `Log error: ${res.status} ${res.statusText}`;
+      return;
+    }
+    
     const data = await res.json();
+    console.log(`[Log Fetch] Success: ${data.totalLines || 0} lines`);
     elLogStream.innerText = data.content || "(Empty log)";
     elLogStream.scrollTop = elLogStream.scrollHeight;
   } catch (e) {
-    elLogStream.innerText = `Error fetching log: ${e.message}`;
+    console.error(`[Log Fetch] Network error:`, e);
+    elLogStream.innerText = `Error fetching log: ${e.message}\n\nCheck server is running on port 8765`;
   }
 }
 
@@ -1123,7 +1151,9 @@ function escapeHtml(text) {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 async function executeActionCard(actionId) {
@@ -1848,15 +1878,6 @@ async function promotePlanToMission() {
     else showToast("🚀 Mission started (" + result.planCount + " steps)");
   });
 }
-
-// Add to DOMContentLoaded init
-document.addEventListener("DOMContentLoaded", () => {
-  // ... existing init code ...
-  loadReadinessPanel();
-  loadProjectPlan();
-  setInterval(loadReadinessPanel, 8000);
-  initBottomPanelView();
-});
 
 // ── Sessions Search & History ────────────────────────────────────────
 let sessionSearchState = {

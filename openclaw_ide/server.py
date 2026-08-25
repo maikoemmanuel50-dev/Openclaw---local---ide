@@ -1379,7 +1379,7 @@ def gate_check(action_key, params):
         return False, "4K HOLD is in effect — 1080p delivery must finish first (reactor refused render_4k / run_1080_then_4k)."
     if action.get("gate_blender") and render["blenderRunning"]:
         # Find the active scene dynamically
-        active_scene = next((s["name"] for s in render["scenes"] if s["frames"] > 0 and not s["isReady"]), "unknown")
+        active_scene = next((s["name"] for s in render["sceneDetails"] if s["frames"] > 0), "unknown")
         return False, (f"Blender is actively rendering {active_scene} — one GPU job at a time. "
                        "Ask the user to approve a second job or wait for the active render to finish.")
     if action.get("gate_cpu") and render["blenderRunning"]:
@@ -2339,7 +2339,7 @@ def inspect_image_with_vl(image_path, question=""):
             "images": [encoded],
             "keep_alive": -1,
             "stream": False,
-            "options": {"num_predict": 512},
+            "options": {"num_predict": 2048},
         }
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
@@ -2409,7 +2409,7 @@ PLANNER_PROMPT = (
     "Return STRICT JSON ONLY — a JSON array of step objects, no prose, no markdown:\n"
     '[\n'
     '  {"rank": 1, "deliverable": "short name",\n'
-    '   "tool": "one of the valid tools"\n'
+    '   "tool": "one of the valid tools",\n'
     '   "args": {<tool arguments as a JSON object>},\n'
     '   "verify": "what proves this step is done"},\n'
     "  ...\n"
@@ -2949,6 +2949,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
         url = urllib.parse.urlparse(self.path)
         path = url.path
         content_len = int(self.headers.get('Content-Length', 0))
+        # Security: limit request size to 10MB
+        if content_len > 10_000_000:
+            self._send_json({"error": "Request too large (max 10MB)"}, 413)
+            return
         post_body = self.rfile.read(content_len) if content_len > 0 else b"{}"
 
         try:
@@ -3205,6 +3209,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": str(e)}, 500)
 
     def handle_logs_tail(self, log_name, line_count=50):
+        print(f"[Logs] Requested: {log_name}, lines: {line_count}", flush=True)
         valid_logs = {"PRODUCTION_STATUS.md", "STATUS_LIVE_DELIVERY.txt",
              "STATUS_POWER_CHECKPOINT.txt", "arch_comm_iv_lock_log.txt",
              "render_log_phaseB_rerender.txt"}
@@ -3266,7 +3271,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         if mode == "plan":
             try:
                 payload = {"model": _VL_MODEL, "stream": False, "keep_alive": 60,
-                           "options": {"temperature": 0.7, "num_ctx": 8192, "num_predict": 512},
+            "options": {"temperature": 0.7, "num_ctx": 16384, "num_predict": 4096},
                            "messages": [{"role": "system", "content": SYSTEM_PROMPT},
                                         {"role": "user", "content": prompt}]}
                 data = json.dumps(payload).encode("utf-8")
@@ -3343,10 +3348,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
         battery_data = get_battery_info()
         crestodian_data = get_crestodian_info()
         # Find the active scene dynamically
-        active_scene = next((s for s in render_data["scenes"] if s["frames"] > 0 and not s["isReady"]), None)
+        active_scene = next((s for s in render_data["sceneDetails"] if s["frames"] > 0), None)
         active_scene_name = active_scene["name"] if active_scene else "none"
         active_scene_frames = active_scene["frames"] if active_scene else 0
-        active_scene_target = active_scene["target"] if active_scene else 0
+        active_scene_target = 1000  # Default target
 
         dynamic_system = (
             f"{system_msg}\n\n"
@@ -3527,7 +3532,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 "model": model,
                 "stream": False,
                 "keep_alive": -1,
-                "options": {"temperature": 0.2, "num_ctx": 16384, "num_predict": 1536, "top_p": 0.9},
+                "options": {"temperature": 0.2, "num_ctx": 16384, "num_predict": 4096, "top_p": 0.9},
                 "messages": messages,
                 "tools": filtered_tools or AGENT_TOOLS,
             }
@@ -3541,6 +3546,9 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 )
                 with urllib.request.urlopen(req, timeout=600) as resp:
                     result = json.loads(resp.read().decode("utf-8"))
+                # Log done_reason to verify truncation cause
+                done_reason = result.get("done_reason", "unknown")
+                print(f"[agent-loop] done_reason: {done_reason}", flush=True)
                 msg = (result.get("message") or {})
                 tool_calls = list(msg.get("tool_calls") or [])
                 # Filter native tool_calls to only valid AGENT_TOOLS names;
@@ -3953,7 +3961,16 @@ class IDEHandler(SimpleHTTPRequestHandler):
         plans_dir = IDE_ROOT / ".plans"
         plan_file = plans_dir / filename
         
-        if not plan_file.exists() or not plan_file.suffix == ".json":
+        # Security: resolve and validate path is inside plans_dir
+        try:
+            plan_file_resolved = plan_file.resolve()
+            plans_dir_resolved = plans_dir.resolve()
+            plan_file_resolved.relative_to(plans_dir_resolved)
+        except ValueError:
+            self._send_json({"error": "Invalid file path"}, 400)
+            return
+        
+        if not plan_file.exists() or plan_file.suffix != ".json":
             self._send_json({"error": "Plan file not found"}, 404)
             return
         
@@ -4073,30 +4090,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
             "plan_version": row["plan_version"],
             "trace": trace
         })
-        self._send_json({
-            "actions": list(EXEC_ACTIONS.keys()),
-            "shellProbes": [k for k, _ in ALLOWED_SHELL_PATTERNS],
-            "gate": {
-                "oneGpuJob": True,
-                "fourKHold": True,
-                "cpuWhileGpu": True,
-            },
-            "copyright": {
-                "endpoint": "/api/copyright/check",
-                "verdicts": ["CLEAR", "WARN", "BLOCK"],
-                "policy": "docs/guides/02_production_standards/copyright_guardrail_youtube_policy.md",
-                "blockedSources": ["official brand logos", "YouTube rips", "scraped images", "unlicensed music/SFX"],
-                "allowedSources": ["Mixkit", "Unsplash", "Poly Haven CC0", "Blender spine", "project SVG"],
-            },
-            "mission": {
-                "endpoint": "/api/mission",
-                "mode": "analyze → rank → execute sequentially (next step only after the current is verified done)",
-                "haltsOn": ["BLOCKED_BY_GATE", "failed step"],
-                "maxSteps": 10,
-            },
-        })
 
-def handle_agent_stream(self, session):
+    def handle_agent_stream(self, session):
         """SSE stream of agent thinking events for a session."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
@@ -4142,26 +4137,42 @@ def handle_agent_stream(self, session):
             pass  # Client disconnected
 
     def handle_openclaw_exec(self, payload):
-        command = payload.get("command", "")
-        if not command:
-            self._send_json({"error": "Empty command"}, 400)
+        """Execute a specific allowed operation (not arbitrary commands)."""
+        operation = payload.get("operation", "")
+        if not operation:
+            self._send_json({"error": "No operation specified"}, 400)
             return
-
+        
+        # Dispatch table of allowed operations
+        ALLOWED_OPERATIONS = {
+            "ping_qwen": lambda: subprocess.run(
+                ["python", "scripts/qwen_local.py", "ping"],
+                cwd=str(WORKSPACE_ROOT), capture_output=True, text=True, timeout=30
+            ),
+            "list_renders": lambda: subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "Get-ChildItem", str(RENDER_ROOT / "video_clips")],
+                cwd=str(WORKSPACE_ROOT), capture_output=True, text=True, timeout=30
+            ),
+            "check_blender": lambda: subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "Get-Process", "blender", "-ErrorAction", "SilentlyContinue"],
+                cwd=str(WORKSPACE_ROOT), capture_output=True, text=True, timeout=30
+            ),
+        }
+        
+        if operation not in ALLOWED_OPERATIONS:
+            self._send_json({"error": f"Operation not allowed: {operation}. Allowed: {list(ALLOWED_OPERATIONS.keys())}"}, 403)
+            return
+        
         try:
-            proc = subprocess.run(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
-                cwd=str(WORKSPACE_ROOT),
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
+            proc = ALLOWED_OPERATIONS[operation]()
             self._send_json({
+                "ok": proc.returncode == 0,
                 "stdout": proc.stdout,
                 "stderr": proc.stderr,
                 "exitCode": proc.returncode
             })
         except subprocess.TimeoutExpired:
-            self._send_json({"error": "Command timed out (30s limit)"}, 408)
+            self._send_json({"error": "Operation timed out (30s limit)"}, 408)
         except Exception as e:
             self._send_json({"error": str(e)}, 500)
 
@@ -4361,47 +4372,113 @@ _terminal_ws_loop = None
 if HAS_WEBSOCKETS:
     async def _terminal_handler(websocket):
         _terminal_ws_clients.add(websocket)
-        master_fd = None
-        pid = None
+        proc = None
+        output_queue = None
+        drain_thread = None
         try:
-            import pty, signal, select, struct, fcntl, termios
-            master_fd, slave_fd = pty.openpty()
-            size = struct.pack('HHHH', 24, 80, 0, 0)
-            try: fcntl.ioctl(master_fd, termios.TIOCSWINSZ, size)
-            except: pass
-            pid = os.fork()
-            if pid == 0:
-                os.close(master_fd)
-                os.setsid()
-                try: fcntl.ioctl(slave_fd, termios.TIOCSCTTY, 0)
-                except: pass
-                os.dup2(slave_fd, 0); os.dup2(slave_fd, 1); os.dup2(slave_fd, 2)
-                if slave_fd > 2: os.close(slave_fd)
-                os.execvp("powershell", ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"])
-            else:
-                os.close(slave_fd)
-                await websocket.send("OpenClaw Terminal\r\nType 'exit' to close\r\n\r\n")
-                while True:
-                    r, _, _ = select.select([master_fd], [], [], 0.1)
-                    if r:
+            # Try pywinpty first (Windows ConPTY API - proper terminal support)
+            try:
+                from winpty import PtyProcess
+                import queue
+                
+                proc = PtyProcess.spawn(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"])
+                output_queue = queue.Queue()
+                
+                def drain_stdout():
+                    while proc.isalive():
                         try:
-                            data = os.read(master_fd, 4096).decode('utf-8', errors='replace')
-                            await websocket.send(data)
-                        except: break
+                            data = proc.read(1024)
+                            if data:
+                                output_queue.put(data)
+                        except Exception as e:
+                            print(f"[Terminal] Drain error: {e}", flush=True)
+                            break
+                
+                drain_thread = threading.Thread(target=drain_stdout, daemon=True)
+                drain_thread.start()
+                
+                await websocket.send("OpenClaw Terminal (pywinpty)\r\nType 'exit' to close\r\n\r\n")
+                
+                while True:
+                    # Read from queue (non-blocking)
+                    output = []
+                    while not output_queue.empty():
+                        try:
+                            output.append(output_queue.get_nowait())
+                        except queue.Empty:
+                            break
+                    if output:
+                        await websocket.send("".join(output))
+                    
+                    # Write to terminal
                     try:
                         msg = await asyncio.wait_for(websocket.recv(), timeout=0.1)
-                        os.write(master_fd, msg.encode())
-                    except asyncio.TimeoutError: pass
-                    except: break
-        except Exception: pass
+                        proc.write(msg)
+                    except asyncio.TimeoutError:
+                        pass
+                    except:
+                        break
+                        
+            except ImportError:
+                # Fallback: subprocess with queue (limited terminal support)
+                import subprocess
+                import queue
+                
+                proc = subprocess.Popen(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass"],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
+                )
+                output_queue = queue.Queue()
+                
+                def drain_stdout():
+                    while proc.poll() is None:
+                        try:
+                            line = proc.stdout.readline()
+                            if line:
+                                output_queue.put(line.decode('utf-8', errors='replace'))
+                        except Exception as e:
+                            print(f"[Terminal] Drain error: {e}", flush=True)
+                            break
+                
+                drain_thread = threading.Thread(target=drain_stdout, daemon=True)
+                drain_thread.start()
+                
+                await websocket.send("OpenClaw Terminal (subprocess fallback)\r\nType 'exit' to close\r\n\r\n")
+                
+                while True:
+                    output = []
+                    while not output_queue.empty():
+                        try:
+                            output.append(output_queue.get_nowait())
+                        except queue.Empty:
+                            break
+                    if output:
+                        await websocket.send("".join(output))
+                    
+                    try:
+                        msg = await asyncio.wait_for(websocket.recv(), timeout=0.1)
+                        proc.stdin.write(msg.encode())
+                        proc.stdin.flush()
+                    except asyncio.TimeoutError:
+                        pass
+                    except:
+                        break
+        except Exception as e:
+            print(f"[Terminal] Error: {e}", flush=True)
         finally:
             _terminal_ws_clients.discard(websocket)
-            if master_fd is not None:
-                try: os.close(master_fd)
-                except: pass
-            if pid is not None:
-                try: os.kill(pid, signal.SIGTERM)
-                except: pass
+            # Cleanup: kill process
+            if proc is not None:
+                try:
+                    if hasattr(proc, 'kill'):
+                        proc.kill()
+                    elif hasattr(proc, 'close'):
+                        proc.close()
+                except:
+                    pass
 
     async def _start_terminal_server():
         global _terminal_ws_loop
