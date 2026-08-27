@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OpenClaw Studio IDE — Local Production Platform</title>
+  <title>OpenClaw IDE</title>
   <link rel="stylesheet" href="style.css?v=3.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,8 +20,14 @@
   <header class="app-header">
     <div class="header-left">
       <div class="logo-box">
-        <span class="logo-orb"></span>
+        <img src="assets/maiko_ombasa_logo.png" alt="Maiko Ombasa" class="logo-img" style="height:32px;width:auto;border-radius:6px;margin-right:8px;">
         <span class="logo-title">OPENCLAW <span class="logo-accent">IDE</span></span>
+      </div>
+      <div class="project-selector" id="projectSelector">
+        <select id="projectSelect" class="project-select" onchange="switchProject(this.value)" title="Switch Project">
+          <option value="current">Current Workspace</option>
+        </select>
+        <button class="btn-quick btn-new-project" id="btnNewProject" onclick="createNewProject()" title="Create New Project">+ New</button>
       </div>
       <span class="workspace-badge" id="workspaceBadge">OpenClaw Local IDE</span>
     </div>
@@ -469,6 +475,7 @@
             </button>
           </div>
           <div class="panel-controls">
+            <button class="icon-btn" id="btnPauseLog" title="Pause/Resume Log Auto-scroll (Ctrl+L to focus)">⏸</button>
             <button class="icon-btn" id="btnRefreshLog" title="Refresh Log">↻</button>
             <button class="icon-btn" id="btnToggleBottom" title="Collapse Panel">▾</button>
           </div>

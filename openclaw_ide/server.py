@@ -28,6 +28,30 @@ DEFAULT_WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE_ROOT = Path(DEFAULT_WORKSPACE).resolve()
 IDE_ROOT = (WORKSPACE_ROOT).resolve()
 
+# #region agent log
+_DEBUG_LOG_PATH = (Path(DEFAULT_WORKSPACE).resolve().parent / "debug-c6d300.log")
+def _agent_dbg(hypothesis_id, location, message, data=None):
+    try:
+        payload = {
+            "sessionId": "c6d300",
+            "hypothesisId": hypothesis_id,
+            "location": location,
+            "message": message,
+            "data": data or {},
+            "timestamp": int(time.time() * 1000),
+        }
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as _df:
+            _df.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
+    except Exception:
+        pass
+def _safe_print(*args, **kwargs):
+    """print() that never crashes the request handler (broken redirected stdout)."""
+    try:
+        print(*args, **kwargs)
+    except Exception as e:
+        _agent_dbg("H1", "server.py:_safe_print", "print_failed", {"error": repr(e), "args": [str(a)[:80] for a in args]})
+# #endregion
+
 # ── OpenClaw CLI Shim Path (configurable via env) ──
 OPENCLAW_SHIM = os.environ.get("AFRICA_CLAW_SHIM") or r"C:\Users\HP\AppData\Roaming\npm\openclaw.cmd"
 
@@ -1924,7 +1948,10 @@ def save_pasted_image(data_uri):
 # Read-only information tools. When the 14b emits ONLY these (tool JSON, no
 # prose) the tool results ARE the answer — we format them into a readable
 # report and stop instead of asking the model for a second round.
-INFO_TERMINAL_TOOLS = {"production_status", "read_log", "shell_probe", "inspect_image", "copyright_check", "brainstorm"}
+# brainstorm intentionally excluded: in build mode the model often brainstorms
+# first then must continue with more tools — treating it as info-only caused
+# premature single-round exits.
+INFO_TERMINAL_TOOLS = {"production_status", "read_log", "shell_probe", "inspect_image", "copyright_check"}
 
 
 def _format_tool_summary(results):
@@ -2868,6 +2895,75 @@ def _read_log_tail_fast(log_path, line_count=50, max_bytes=131072):
         return f"Log read error: {e}"
 
 
+# ── Project Management ──────────────────────────────────────────────
+def list_projects():
+    """List sub-folders in workspace root that look like projects."""
+    projects = []
+    ws = WORKSPACE_ROOT.parent  # parent of openclaw_ide
+    # Always include the current workspace
+    projects.append({
+        "name": PROJECT_CONFIG.get("name", "Current Workspace"),
+        "path": str(WORKSPACE_ROOT),
+        "active": True,
+    })
+    # Scan siblings for other project folders
+    try:
+        for d in ws.iterdir():
+            if d.is_dir() and d != WORKSPACE_ROOT and not d.name.startswith("."):
+                # Check if it has project-like structure
+                if (d / "project.json").exists() or (d / "openclaw_ide").is_dir():
+                    projects.append({
+                        "name": d.name,
+                        "path": str(d),
+                        "active": False,
+                    })
+    except Exception:
+        pass
+    return projects
+
+
+def switch_project(project_path):
+    """Switch the active workspace to a different project directory."""
+    global WORKSPACE_ROOT, IDE_ROOT, RENDER_ROOT, PROJECT_CONFIG
+    p = Path(project_path).resolve()
+    if not p.exists() or not p.is_dir():
+        return {"ok": False, "error": f"Directory not found: {project_path}"}
+    WORKSPACE_ROOT = p
+    IDE_ROOT = p
+    load_project_config()
+    return {"ok": True, "name": p.name, "path": str(p)}
+
+
+def create_project(name):
+    """Scaffold a new project folder with minimal structure."""
+    ws = WORKSPACE_ROOT.parent
+    safe_name = re.sub(r'[^\w\s\-]', '', name).strip().replace(' ', '_')
+    if not safe_name:
+        return {"ok": False, "error": "Invalid project name"}
+    project_dir = ws / safe_name
+    if project_dir.exists():
+        return {"ok": False, "error": f"Project '{safe_name}' already exists"}
+    try:
+        project_dir.mkdir(parents=True)
+        (project_dir / "src").mkdir()
+        (project_dir / "assets").mkdir()
+        (project_dir / "docs").mkdir()
+        config = {
+            "name": name,
+            "episode": "",
+            "renderRoot": "renders",
+            "scriptsRoot": "scripts",
+            "delivery": {"resolution": "1080p", "targetFps": 24},
+            "gates": {"4kHold": True, "gpuOneMax": True},
+            "scenes": [],
+        }
+        with open(str(project_dir / "project.json"), "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+        return {"ok": True, "name": name, "path": str(project_dir)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 class IDEHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(IDE_ROOT), **kwargs)
@@ -2947,13 +3043,18 @@ class IDEHandler(SimpleHTTPRequestHandler):
         elif path == "/api/readiness":
             self._send_json(self.get_readiness())
         elif path == "/api/sessions/search":
-            self.handle_search_sessions(query)
+            # parse_qs returns lists; flatten to strings for the shared handler
+            flat = {k: (v[0] if isinstance(v, list) and len(v) == 1 else v)
+                    for k, v in query.items()}
+            self.handle_search_sessions(flat)
         elif path == "/api/sessions/detail":
             self.handle_session_detail(query)
         elif path == "/api/agent/stream":
             self.handle_agent_stream(query.get("session", [None])[0])
         elif path == "/api/git/status":
             self._send_json(handle_git_status())
+        elif path == "/api/projects/list":
+            self._send_json({"projects": list_projects()})
         else:
             super().do_GET()
 
@@ -3020,6 +3121,10 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json(handle_git_stage(payload))
         elif path == "/api/model":
             self._send_json(handle_model_change(payload))
+        elif path == "/api/projects/switch":
+            self._send_json(switch_project(payload.get("path", "")))
+        elif path == "/api/projects/create":
+            self._send_json(create_project(payload.get("name", "")))
         else:
             self.send_error(404, "Unknown API endpoint")
 
@@ -3221,14 +3326,20 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": str(e)}, 500)
 
     def handle_logs_tail(self, log_name, line_count=50):
-        print(f"[Logs] Requested: {log_name}, lines: {line_count}", flush=True)
+        # #region agent log
+        _agent_dbg("H1", "server.py:handle_logs_tail:entry", "logs_tail_enter", {
+            "log_name": log_name, "line_count": line_count,
+            "workspace": str(WORKSPACE_ROOT), "pid": os.getpid(),
+        })
+        # #endregion
+        _safe_print(f"[Logs] Requested: {log_name!r}, lines={line_count}", flush=True)
         valid_logs = {"PRODUCTION_STATUS.md", "STATUS_LIVE_DELIVERY.txt",
              "STATUS_POWER_CHECKPOINT.txt", "arch_comm_iv_lock_log.txt",
              "render_log_phaseB_rerender.txt"}
         valid_logs.update(PROJECT_CONFIG.get("logFiles", []))
         if log_name not in valid_logs:
-            # Default to first available log file
             default_log = PROJECT_CONFIG.get("logFiles", ["PRODUCTION_STATUS.md"])[0]
+            _safe_print(f"[Logs] Unknown log {log_name!r}; falling back to {default_log!r}", flush=True)
             log_name = default_log
         
         target = WORKSPACE_ROOT / log_name
@@ -3236,14 +3347,30 @@ class IDEHandler(SimpleHTTPRequestHandler):
             target_live = RENDER_ROOT.parent / log_name
             if target_live.exists():
                 target = target_live
+                _safe_print(f"[Logs] Resolved via live root: {target}", flush=True)
             else:
+                _safe_print(f"[Logs] Missing file: {log_name!r}", flush=True)
+                # #region agent log
+                _agent_dbg("H1", "server.py:handle_logs_tail:missing", "logs_missing_send", {"log_name": log_name})
+                # #endregion
                 self._send_json({"log": log_name, "content": "(File does not exist yet)"})
                 return
 
         try:
             content = _read_log_tail_fast(target, line_count=line_count)
-            self._send_json({"log": log_name, "content": content, "totalLines": len(content.splitlines())})
+            n_lines = len(content.splitlines())
+            _safe_print(f"[Logs] OK {target.name}: {n_lines} lines", flush=True)
+            # #region agent log
+            _agent_dbg("H1", "server.py:handle_logs_tail:ok", "logs_ok_send", {
+                "log_name": log_name, "n_lines": n_lines, "target": str(target),
+            })
+            # #endregion
+            self._send_json({"log": log_name, "content": content, "totalLines": n_lines})
         except Exception as e:
+            # #region agent log
+            _agent_dbg("H1", "server.py:handle_logs_tail:exc", "logs_exception", {"error": repr(e)})
+            # #endregion
+            _safe_print(f"[Logs] Read error for {log_name!r}: {e}", flush=True)
             self._send_json({"log": log_name, "content": f"Log read error: {str(e)}"})
 
     def handle_chat(self, payload):
@@ -3281,6 +3408,11 @@ class IDEHandler(SimpleHTTPRequestHandler):
 
         # Plan mode: fast VL model for brainstorming/planning — no tools, no agent loop
         if mode == "plan":
+            # #region agent log
+            _agent_dbg("H3", "server.py:handle_chat:plan", "plan_mode_enter", {
+                "session": session, "prompt_len": len(prompt),
+            })
+            # #endregion
             try:
                 payload = {"model": _VL_MODEL, "stream": False, "keep_alive": 60,
             "options": {"temperature": 0.7, "num_ctx": 16384, "num_predict": 4096},
@@ -3294,8 +3426,19 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 output = (result.get("message") or {}).get("content", "") or "No response"
                 log_prompt({"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "route": "plan",
                             "model": _VL_MODEL, "session": session, "prompt": prompt, "reply": str(output)[:1200]})
+                # #region agent log
+                _agent_dbg("H3", "server.py:handle_chat:plan", "plan_mode_ok_no_trace", {
+                    "session": session, "reply_len": len(str(output)),
+                    "wrote_trace": False,
+                })
+                # #endregion
                 self._send_json({"reply": output, "model": _VL_MODEL, "session": session, "rounds": [], "mode": "plan", "ok": True})
             except Exception as e:
+                # #region agent log
+                _agent_dbg("H3", "server.py:handle_chat:plan", "plan_mode_error", {
+                    "session": session, "error": repr(e),
+                })
+                # #endregion
                 self._send_json({"reply": f"Plan mode error: {e}", "model": _VL_MODEL, "session": session, "ok": False})
             return
 
@@ -3727,11 +3870,16 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 user_prompt = str(messages[1].get("content", "")).lower()
             ACTION_WORDS = {"audit", "review", "crunch", "analyze", "diagnose",
                             "check", "verify", "fix", "execute", "escalate",
-                            "mission", "root out", "open items", "blockers"}
+                            "mission", "root out", "open items", "blockers",
+                            "generate", "create", "build", "develop", "produce",
+                            "animate", "implement", "render", "assemble"}
             is_status_only = not any(w in user_prompt for w in ACTION_WORDS)
+            # Build mode always continues after read-only probes so the model
+            # can chain into run_action / escalate rather than stopping early.
             if (round_names
                     and all(n in INFO_TERMINAL_TOOLS for n in round_names)
-                    and is_status_only):
+                    and is_status_only
+                    and mode != "build"):
                 summary = _format_tool_summary(round_results)
                 answer = (clean_content + "\n\n" + summary).strip() if clean_content else summary
                 print(f"[agent-loop] info-only round ({','.join(round_names)}) -> formatted report", flush=True)
@@ -3994,20 +4142,37 @@ class IDEHandler(SimpleHTTPRequestHandler):
         except Exception as e:
             self._send_json({"error": str(e)}, 500)
 
-    def handle_search_sessions(self, query):
-        """POST /api/sessions/search — full-text search with filters."""
-        try:
-            payload = json.loads(query.get("body", "{}"))
-        except Exception:
+    def handle_search_sessions(self, payload):
+        """GET/POST /api/sessions/search — full-text search with filters.
+
+        Call sites always pass a flat dict (POST JSON body, or flattened GET qs).
+        """
+        if not isinstance(payload, dict):
             payload = {}
-        
-        q = payload.get("q", "").strip()
-        mode = payload.get("mode")
-        status = payload.get("status")
+
+        q = str(payload.get("q") or "").strip()
+        mode = payload.get("mode") or None
+        status = payload.get("status") or None
         has_plan = payload.get("has_plan")
-        limit = min(int(payload.get("limit", 50)), 200)
-        offset = int(payload.get("offset", 0))
+        if isinstance(has_plan, str):
+            has_plan = has_plan.strip().lower() in ("1", "true", "yes")
+        elif has_plan is not None:
+            has_plan = bool(has_plan)
+        try:
+            limit = min(int(payload.get("limit", 50)), 200)
+        except (TypeError, ValueError):
+            limit = 50
+        try:
+            offset = max(int(payload.get("offset", 0)), 0)
+        except (TypeError, ValueError):
+            offset = 0
         
+        # #region agent log
+        _agent_dbg("H2", "server.py:handle_search_sessions", "sessions_search_enter", {
+            "q": q, "mode": mode, "status": status, "has_plan": has_plan,
+            "limit": limit, "offset": offset,
+        })
+        # #endregion
         _init_search_index()
         conn = sqlite3.connect(INDEX_DB)
         conn.row_factory = sqlite3.Row
@@ -4067,6 +4232,11 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 "rank": round(row["rank"], 2)
             })
         
+        # #region agent log
+        _agent_dbg("H2", "server.py:handle_search_sessions", "sessions_search_ok", {
+            "result_count": len(results), "total_sent": len(results),
+        })
+        # #endregion
         self._send_json({"results": results, "total": len(results), "query": q})
 
     def handle_session_detail(self, query):
@@ -4106,6 +4276,11 @@ class IDEHandler(SimpleHTTPRequestHandler):
 
     def handle_agent_stream(self, session):
         """SSE stream of agent thinking events for a session."""
+        # #region agent log
+        _agent_dbg("H3", "server.py:handle_agent_stream:start", "sse_start", {
+            "session": session, "trace": str(AGENT_TRACE_PATH),
+        })
+        # #endregion
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache, no-transform")
@@ -4116,6 +4291,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         # Track position in trace file
         last_pos = 0
         trace_path = AGENT_TRACE_PATH
+        events_sent = 0
         
         try:
             while True:
@@ -4137,16 +4313,33 @@ class IDEHandler(SimpleHTTPRequestHandler):
                                     data = json.dumps({
                                         "type": event["event"],
                                         "round": event.get("round"),
+                                        "rounds": event.get("rounds"),
                                         "model_text": event.get("model_text", "")[:500],
                                         "tools": event.get("tools_called", []),
-                                        "ts": event.get("ts")
+                                        "tool": event.get("tool"),
+                                        "step": event.get("step"),
+                                        "elapsed_s": event.get("elapsed_s"),
+                                        "ts": event.get("ts"),
                                     })
                                     self.wfile.write(f"data: {data}\n\n".encode())
                                     self.wfile.flush()
+                                    events_sent += 1
+                                    # #region agent log
+                                    if events_sent <= 5:
+                                        _agent_dbg("H3", "server.py:handle_agent_stream", "sse_event_sent", {
+                                            "session": session, "type": event.get("event"),
+                                            "events_sent": events_sent,
+                                        })
+                                    # #endregion
                         except Exception:
                             pass
                 time.sleep(0.3)  # Faster polling for more responsive updates
         except (ConnectionError, BrokenPipeError):
+            # #region agent log
+            _agent_dbg("H3", "server.py:handle_agent_stream:end", "sse_client_gone", {
+                "session": session, "events_sent": events_sent,
+            })
+            # #endregion
             pass  # Client disconnected
 
     def handle_openclaw_exec(self, payload):

@@ -8,6 +8,7 @@ let activeLog = null;
 let allFiles = [];
 let isMarkdownPreview = false;
 let pendingImages = []; // pasted/dropped images awaiting send (routed to Vision 7B)
+let logPaused = false; // true when log auto-scroll is paused
 
 // DOM Elements
 const elCodeEditor = document.getElementById("codeEditor");
@@ -34,6 +35,9 @@ const elToastContainer = document.getElementById("toastContainer");
 
 // Initialize on Load
 document.addEventListener("DOMContentLoaded", () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7833/ingest/368ea75e-1629-4171-b0d2-00a2b6f4ff90',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6d300'},body:JSON.stringify({sessionId:'c6d300',location:'app.js:DOMContentLoaded',message:'ide_init',data:{href:location.href},timestamp:Date.now(),hypothesisId:'H0'})}).catch(()=>{});
+  // #endregion
   setupNavigation();
   setupEditor();
   setupChat();
@@ -41,6 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupLogs();
   initAgentEngineMode();
   initBottomPanelView();
+  initPanelResizers();
 
   // Load initial data
   loadFileTree();
@@ -58,6 +63,11 @@ document.addEventListener("DOMContentLoaded", () => {
   loadHourlyPanel();
   initAudioPanel();
   updateNetworkStatus();
+  // Initial log fetch (setupLogs alone does not load content)
+  if (activeLog !== "terminal") {
+    refreshLog();
+  }
+  loadProjectList();
 
   // Consolidated polling loop every 15 seconds (reduced from 3 separate 8s intervals)
   setInterval(() => {
@@ -97,6 +107,14 @@ function setupNavigation() {
       if (targetView) {
         targetView.classList.add("active");
       }
+      // #region agent log
+      const loaders = {
+        sessions: typeof loadSessionsPage,
+        readiness: typeof loadReadinessPanel,
+        planboard: typeof loadProjectPlan,
+      };
+      fetch('http://127.0.0.1:7833/ingest/368ea75e-1629-4171-b0d2-00a2b6f4ff90',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6d300'},body:JSON.stringify({sessionId:'c6d300',location:'app.js:setupNavigation',message:'sidebar_view_click_no_loader_call',data:{viewId:viewId,loadersPresent:loaders,note:'setupNavigation does not invoke loadSessionsPage/loadReadinessPanel'},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
     });
   });
 
@@ -522,6 +540,14 @@ function setupLogs() {
     showToast("Log refreshed");
   });
 
+  // Pause / Resume log auto-scroll
+  document.getElementById("btnPauseLog")?.addEventListener("click", () => {
+    logPaused = !logPaused;
+    const btn = document.getElementById("btnPauseLog");
+    if (btn) btn.innerText = logPaused ? "▶" : "⏸";
+    showToast(logPaused ? "Log auto-scroll paused" : "Log auto-scroll resumed");
+  });
+
   document.getElementById("btnToggleBottom")?.addEventListener("click", () => {
     const bottom = document.getElementById("bottomPanel");
     bottom.style.display = bottom.style.display === "none" ? "flex" : "none";
@@ -530,6 +556,7 @@ function setupLogs() {
 
 async function refreshLog() {
   if (activeLog === "terminal") return;
+  if (logPaused) return; // Skip when paused
   // Map "logs" to actual log file
   const logFile = activeLog === "logs" ? "PRODUCTION_STATUS.md" : activeLog;
   try {
@@ -1715,55 +1742,53 @@ function initAudioPanel() {
 
 // ── Panel Resizers ────────────────────────────────────────────────────
 // Drag handles between sidebar ↔ editor, editor ↔ agent, and above bottom panel.
-(function initResizers() {
-  document.addEventListener("DOMContentLoaded", () => {
-    const root = document.documentElement;
+function initPanelResizers() {
+  const root = document.documentElement;
 
-    function hookDrag(handleId, onDrag) {
-      const el = document.getElementById(handleId);
-      if (!el) return;
-      el.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        el.classList.add("active");
-        const onMove = (ev) => onDrag(ev);
-        const onUp = () => {
-          el.classList.remove("active");
-          document.removeEventListener("mousemove", onMove);
-          document.removeEventListener("mouseup", onUp);
-          document.body.style.cursor = "";
-          document.body.style.userSelect = "";
-        };
-        document.addEventListener("mousemove", onMove);
-        document.addEventListener("mouseup", onUp);
-        document.body.style.cursor = el.style.cursor || "col-resize";
-        document.body.style.userSelect = "none";
-      });
-    }
-
-    // Sidebar ↔ Editor (horizontal drag)
-    hookDrag("resizeSidebar", (e) => {
-      const activityW = 50;
-      const newW = Math.max(180, Math.min(600, e.clientX - activityW));
-      root.style.setProperty("--sidebar-width", newW + "px");
+  function hookDrag(handleId, onDrag) {
+    const el = document.getElementById(handleId);
+    if (!el) return;
+    el.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      el.classList.add("active");
+      const onMove = (ev) => onDrag(ev);
+      const onUp = () => {
+        el.classList.remove("active");
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        document.body.style.cursor = "";
+        document.body.style.userSelect = "";
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.body.style.cursor = el.style.cursor || "col-resize";
+      document.body.style.userSelect = "none";
     });
+  }
 
-    // Editor ↔ Agent Panel (horizontal drag from left edge of agent)
-    hookDrag("resizeAgent", (e) => {
-      const newW = Math.max(240, Math.min(700, window.innerWidth - e.clientX));
-      root.style.setProperty("--agent-width", newW + "px");
-    });
-
-    // Bottom Panel (vertical drag — resize from top edge)
-    hookDrag("resizeBottom", (e) => {
-      const editorArea = document.querySelector(".editor-area");
-      const bottom = document.getElementById("bottomPanel");
-      if (!editorArea || !bottom) return;
-      const rect = editorArea.getBoundingClientRect();
-      const newH = Math.max(60, Math.min(500, rect.bottom - e.clientY));
-      bottom.style.height = newH + "px";
-    });
+  // Sidebar ↔ Editor (horizontal drag)
+  hookDrag("resizeSidebar", (e) => {
+    const activityW = 50;
+    const newW = Math.max(180, Math.min(600, e.clientX - activityW));
+    root.style.setProperty("--sidebar-width", newW + "px");
   });
-})();
+
+  // Editor ↔ Agent Panel (horizontal drag from left edge of agent)
+  hookDrag("resizeAgent", (e) => {
+    const newW = Math.max(240, Math.min(700, window.innerWidth - e.clientX));
+    root.style.setProperty("--agent-width", newW + "px");
+  });
+
+  // Bottom Panel (vertical drag — resize from top edge)
+  hookDrag("resizeBottom", (e) => {
+    const editorArea = document.querySelector(".editor-area");
+    const bottom = document.getElementById("bottomPanel");
+    if (!editorArea || !bottom) return;
+    const rect = editorArea.getBoundingClientRect();
+    const newH = Math.max(60, Math.min(500, rect.bottom - e.clientY));
+    bottom.style.height = newH + "px";
+  });
+}
 
 // ── System Readiness Panel ──────────────────────────────────────────
 async function loadReadinessPanel() {
@@ -2105,12 +2130,13 @@ function finalizeStreamingBubble(el) {
 
 // ── Bottom Panel View Toggle ────────────────────────────────────────
 function switchBottomView(view) {
+  console.log(`[BottomPanel] switchBottomView(${view})`);
   const logsView = document.getElementById('viewLogs');
   const terminalView = document.getElementById('viewTerminal');
   const plansView = document.getElementById('viewPlans');
-  const logsTab = document.querySelector('[data-view="logs"]');
-  const terminalTab = document.querySelector('[data-view="terminal"]');
-  const plansTab = document.querySelector('[data-view="plans"]');
+  const logsTab = document.querySelector('.panel-tab[data-view="logs"]');
+  const terminalTab = document.querySelector('.panel-tab[data-view="terminal"]');
+  const plansTab = document.querySelector('.panel-tab[data-view="plans"]');
 
   if (logsView) { logsView.classList.remove('active'); logsView.classList.add('hidden'); }
   if (terminalView) { terminalView.classList.remove('active'); terminalView.classList.add('hidden'); }
@@ -2128,6 +2154,8 @@ function switchBottomView(view) {
     if (plansTab) plansTab.classList.add('active');
     loadPlanList();
   } else {
+    // Default / unknown → logs (never leave panel blank on stale 'reasoning')
+    view = 'logs';
     if (logsView) { logsView.classList.add('active'); logsView.classList.remove('hidden'); }
     if (logsTab) logsTab.classList.add('active');
   }
@@ -2135,38 +2163,93 @@ function switchBottomView(view) {
 }
 
 function initBottomPanelView() {
-  const savedView = localStorage.getItem('bottomPanelView') || 'reasoning';
+  const savedView = localStorage.getItem('bottomPanelView') || 'logs';
   switchBottomView(savedView);
 }
 
 function appendThinkingEvent(data) {
   const content = document.getElementById("thinkingContent");
   if (!content) return;
-  
-  // Remove placeholder on first event
+
+  if (data.type === "stream.token") {
+    return; // tokens render in the chat bubble, not here
+  }
+
   if (content.querySelector(".thinking-placeholder")) {
     content.innerHTML = "";
   }
-  
+
   const div = document.createElement("div");
-  div.className = `thinking-event thinking-${data.type}`;
-  
-  const icons = { thinking: "💭", round: "🧠", tool: "🔧", "loop.start": "🚀" };
+  div.className = `thinking-event thinking-${String(data.type || "event").replace(/\./g, "-")}`;
+
+  const icons = {
+    thinking: "💭",
+    round: "🧠",
+    tool: "🔧",
+    "loop.start": "🚀",
+    "loop.term": "✅",
+    "loop.converged": "🏁",
+    "loop.stuck": "⚠️",
+    "loop.blocked_streak": "⛔",
+    "loop.info_only": "📊",
+    "loop.wallclock": "⏱️",
+    "loop.ollama_error": "❌",
+    "loop.max_rounds": "🔚",
+    "loop.fastpath": "⚡",
+    "mission.step": "📋",
+    "stream.token": "💬",
+  };
   const icon = icons[data.type] || "•";
-  
+
   let html = `<span class="thinking-icon">${icon}</span>`;
-  html += `<span class="thinking-time">${data.ts || ""}</span>`;
-  
-  if (data.type === "round" && data.model_text) {
-    html += `<span class="thinking-text">${esc(data.model_text)}</span>`;
+  html += `<span class="thinking-time">${esc(data.ts || "")}</span>`;
+
+  if (data.type === "round") {
+    if (data.model_text) {
+      html += `<span class="thinking-text">${esc(data.model_text)}</span>`;
+    }
+    if (data.tools && data.tools.length) {
+      data.tools.forEach(t => {
+        const args = t.args ? esc(JSON.stringify(t.args).slice(0, 80)) : "";
+        html += `<div class="thinking-tool">🔧 ${esc(t.name || "")}: ${args}</div>`;
+      });
+    }
+    if (!data.model_text && !(data.tools && data.tools.length)) {
+      html += `<span class="thinking-text">Round ${data.round != null ? data.round : ""}</span>`;
+    }
   } else if (data.type === "tool" && data.tools) {
     data.tools.forEach(t => {
-      html += `<div class="thinking-tool">${t.name}: ${t.args ? JSON.stringify(t.args).slice(0, 80) : ""}</div>`;
+      const args = t.args ? esc(JSON.stringify(t.args).slice(0, 80)) : "";
+      html += `<div class="thinking-tool">🔧 ${esc(t.name || "")}: ${args}</div>`;
     });
   } else if (data.type === "loop.start") {
     html += `<span class="thinking-text">Starting agent loop...</span>`;
+  } else if (data.type === "loop.term") {
+    html += `<span class="thinking-text">Terminal action completed</span>`;
+  } else if (data.type === "loop.converged") {
+    html += `<span class="thinking-text">Agent converged</span>`;
+  } else if (data.type === "loop.stuck") {
+    html += `<span class="thinking-text">Stuck loop detected</span>`;
+  } else if (data.type === "loop.blocked_streak") {
+    html += `<span class="thinking-text">Blocked by gate</span>`;
+  } else if (data.type === "loop.info_only") {
+    html += `<span class="thinking-text">Info-only round completed</span>`;
+  } else if (data.type === "loop.wallclock") {
+    html += `<span class="thinking-text">Time budget exhausted (${data.elapsed_s || 0}s)</span>`;
+  } else if (data.type === "loop.ollama_error") {
+    html += `<span class="thinking-text">Ollama error occurred</span>`;
+  } else if (data.type === "loop.max_rounds") {
+    html += `<span class="thinking-text">Max rounds reached (${data.rounds || data.round || 0})</span>`;
+  } else if (data.type === "loop.fastpath") {
+    html += `<span class="thinking-text">Fast-path response</span>`;
+  } else if (data.type === "mission.step") {
+    html += `<span class="thinking-text">Mission step ${esc(String(data.step || ""))}: ${esc(data.tool || "")}</span>`;
+  } else if (data.type === "thinking") {
+    html += `<span class="thinking-text">${esc(data.model_text || "Thinking...")}</span>`;
+  } else {
+    html += `<span class="thinking-text">${esc(data.model_text || data.type || "Event")}</span>`;
   }
-  
+
   div.innerHTML = html;
   content.appendChild(div);
   content.scrollTop = content.scrollHeight;
@@ -2500,3 +2583,75 @@ function updateTokenDisplay() {
   el.innerHTML = '<div class="token-bar"><div class="token-fill" style="width:' + pct + '%"></div></div><div class="token-text">' + total.toLocaleString() + ' / ' + max.toLocaleString() + ' tokens</div>';
 }
 
+// ── Ctrl+L: Focus Log Panel ────────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key === "l") {
+    e.preventDefault();
+    const bottomPanel = document.getElementById("bottomPanel");
+    if (bottomPanel) {
+      bottomPanel.style.display = "flex";
+      switchBottomView("logs");
+      const logEl = document.getElementById("logStreamContent");
+      if (logEl) logEl.scrollTop = logEl.scrollHeight;
+      showToast("Log panel focused (Ctrl+L)");
+    }
+  }
+});
+
+// ── Project Management ─────────────────────────────────────────────
+async function loadProjectList() {
+  try {
+    const res = await fetch("/api/projects/list");
+    if (!res.ok) return;
+    const data = await res.json();
+    const select = document.getElementById("projectSelect");
+    if (!select || !data.projects) return;
+    select.innerHTML = data.projects.map(p =>
+      `<option value="${escapeHtml(p.path)}" ${p.active ? "selected" : ""}>${escapeHtml(p.name)}</option>`
+    ).join("");
+  } catch (e) {
+    // silently ignore — endpoint may not exist yet
+  }
+}
+
+async function switchProject(projectPath) {
+  try {
+    const res = await fetch("/api/projects/switch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: projectPath })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast("Switched to: " + (data.name || projectPath));
+      localStorage.setItem("openclaw_last_project", projectPath);
+      loadFileTree();
+      refreshLog();
+    } else {
+      showToast("Switch failed: " + (data.error || ""), "error");
+    }
+  } catch (e) {
+    showToast("Switch failed: " + e.message, "error");
+  }
+}
+
+async function createNewProject() {
+  const name = prompt("New project name:");
+  if (!name) return;
+  try {
+    const res = await fetch("/api/projects/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast("Created project: " + name);
+      loadProjectList();
+    } else {
+      showToast("Create failed: " + (data.error || ""), "error");
+    }
+  } catch (e) {
+    showToast("Create failed: " + e.message, "error");
+  }
+}
