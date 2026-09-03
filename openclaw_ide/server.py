@@ -2969,6 +2969,40 @@ def list_projects():
     return projects
 
 
+def read_project_config_file():
+    """Read the ACTIVE project's raw project.json (no merged plan state)."""
+    p = WORKSPACE_ROOT / "project.json"
+    if p.exists():
+        try:
+            with open(str(p), "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_project_config(updates):
+    """Merge settings into the ACTIVE project's project.json and reload."""
+    try:
+        cfg = read_project_config_file()
+        if not isinstance(cfg, dict):
+            cfg = {}
+        for k, v in (updates or {}).items():
+            if v is not None:
+                cfg[k] = v
+        p = WORKSPACE_ROOT / "project.json"
+        tmp = p.with_suffix(".json.tmp")
+        with open(str(tmp), "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+        os.replace(str(tmp), str(p))
+        load_project_config()
+        _STATUS_CACHE["ts"] = 0.0
+        _STATUS_CACHE["data"] = None
+        return {"ok": True, "config": cfg}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def switch_project(project_path):
     """Switch the active workspace to a different project directory."""
     global WORKSPACE_ROOT, IDE_ROOT, RENDER_ROOT, PROJECT_CONFIG, _INDEX_INITIALIZED, GUIDES_ROOT
@@ -3168,6 +3202,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json(browse_filesystem(query.get("path", [""])[0]))
         elif path == "/api/projects/list":
             self._send_json({"projects": list_projects()})
+        elif path == "/api/projects/config":
+            self._send_json({"ok": True, "config": read_project_config_file()})
         else:
             super().do_GET()
 
@@ -3240,6 +3276,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json(switch_project(payload.get("path", "")))
         elif path == "/api/projects/create":
             self._send_json(create_project(payload.get("name", ""), payload.get("parent")))
+        elif path == "/api/projects/config":
+            self._send_json(save_project_config(payload.get("config") or {}))
         else:
             self.send_error(404, "Unknown API endpoint")
 

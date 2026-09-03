@@ -118,6 +118,7 @@ function setupNavigation() {
         hourly: "loadHourlyPanel",
         audio: "loadAudioFiles",
         power: "loadPowerPanel",
+        settings: "loadProjectSettings",
       };
       const loaderName = viewLoaders[viewId];
       if (loaderName && typeof window[loaderName] === "function") {
@@ -503,9 +504,8 @@ function renderPipelineList(renderData) {
     if (projectNameEl) projectNameEl.textContent = renderData.projectName;
   }
   
-  // Update settings panel
-  const settingProjectName = document.getElementById("settingProjectName");
-  if (settingProjectName && renderData.projectName) settingProjectName.value = renderData.projectName;
+  // Settings inputs are populated by loadProjectSettings() when the Settings
+  // view is opened (not here, so a status tick can't clobber an in-progress edit).
   
   // Update log tabs if available
   if (renderData.logFiles && renderData.logFiles.length > 0) {
@@ -2669,6 +2669,60 @@ async function switchProject(projectPath) {
   } catch (e) {
     showToast("Switch failed: " + e.message, "error");
   }
+}
+
+// ── Project Settings (persist into the active project's project.json) ──
+async function loadProjectSettings() {
+  const ids = {
+    settingProjectName: "name",
+    settingRenderRoot: "renderRoot",
+    settingScriptsRoot: "scriptsRoot",
+    settingBlenderPath: "blenderPath",
+  };
+  const msg = document.getElementById("settingsSaveMsg");
+  if (msg) { msg.textContent = ""; msg.style.color = "#64748b"; }
+  try {
+    const res = await fetch("/api/projects/config");
+    const data = await res.json();
+    const cfg = data.config || {};
+    for (const [id, key] of Object.entries(ids)) {
+      const el = document.getElementById(id);
+      if (el) el.value = cfg[key] != null ? cfg[key] : "";
+    }
+  } catch (e) { if (msg) msg.textContent = "Load error: " + e.message; }
+}
+
+async function saveProjectSettings() {
+  const msg = document.getElementById("settingsSaveMsg");
+  if (msg) { msg.textContent = "Saving…"; msg.style.color = "#64748b"; }
+  const map = {
+    settingProjectName: "name",
+    settingRenderRoot: "renderRoot",
+    settingScriptsRoot: "scriptsRoot",
+    settingBlenderPath: "blenderPath",
+  };
+  const config = {};
+  for (const [id, key] of Object.entries(map)) {
+    const el = document.getElementById(id);
+    if (el) config[key] = el.value.trim();
+  }
+  try {
+    const res = await fetch("/api/projects/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      if (msg) { msg.textContent = "Saved ✓"; msg.style.color = "#4ade80"; }
+      showToast("Project settings saved");
+      setTimeout(() => { if (msg) { msg.textContent = ""; } }, 4000);
+      refreshSystemStatus();
+      loadFileTree();
+    } else {
+      if (msg) { msg.textContent = data.error || "Save failed."; msg.style.color = "#f87171"; }
+    }
+  } catch (e) { if (msg) { msg.textContent = "Save error: " + e.message; msg.style.color = "#f87171"; } }
 }
 
 // ── New Project (choose the folder on your computer) ──────────────────

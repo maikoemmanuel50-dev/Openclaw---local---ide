@@ -361,7 +361,19 @@
         <div class="settings-content">
           <div class="setting-group">
             <label>Project Name</label>
-            <input type="text" id="settingProjectName" value="—" readonly />
+            <input type="text" id="settingProjectName" placeholder="(unsaved)" />
+          </div>
+          <div class="setting-group">
+            <label>Render Root</label>
+            <input type="text" id="settingRenderRoot" placeholder="e.g. ./renders" />
+          </div>
+          <div class="setting-group">
+            <label>Scripts Root</label>
+            <input type="text" id="settingScriptsRoot" placeholder="e.g. ./scripts" />
+          </div>
+          <div class="setting-group">
+            <label>Blender Path</label>
+            <input type="text" id="settingBlenderPath" placeholder="path to blender.exe" />
           </div>
           <div class="setting-group">
             <label>Ollama Endpoint</label>
@@ -371,9 +383,9 @@
             <label>Active Local Model</label>
             <input type="text" value="qwen2.5-coder:14b" readonly />
           </div>
-          <div class="setting-group">
-            <label>Render Root</label>
-            <input type="text" id="settingRenderRoot" value="—" readonly />
+          <div class="setting-group" style="display:flex;gap:8px;align-items:center;">
+            <button class="btn-tool" id="btnSaveSettings" onclick="saveProjectSettings()">💾 Save Project Settings</button>
+            <span id="settingsSaveMsg" style="font-size:11px;color:#64748b;"></span>
           </div>
         </div>
       </div>
