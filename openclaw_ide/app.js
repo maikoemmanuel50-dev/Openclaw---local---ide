@@ -1206,7 +1206,8 @@ function formatChatText(t) {
     .replace(/\n\n/g, "<br><br>")
     .replace(/\n/g, "<br>")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\{\{openfile:([^}]*)\}\}/g, (m, rel) => fileChipHtml(rel.trim()));
 }
 
 function escapeHtml(text) {
@@ -1216,6 +1217,20 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// Render an {{openfile:rel}} marker (emitted by the server when the agent
+// writes a file) as a clickable chip that opens the file in the editor.
+function fileChipHtml(rel) {
+  const safe = escapeHtml(rel);
+  return `<button class="file-chip" data-path="${safe}" onclick="openWrittenFile(this)" title="Open in editor">📄 ${safe}</button>`;
+}
+
+function openWrittenFile(btn) {
+  const rel = btn ? btn.getAttribute("data-path") : "";
+  if (!rel) return;
+  if (typeof openFile === "function") openFile(rel);
+  showToast("Opened " + rel);
 }
 
 async function executeActionCard(actionId) {

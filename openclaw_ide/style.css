@@ -345,6 +345,25 @@ body {
   background: var(--gold-500);
 }
 
+/* File chip shown in chat when the agent writes a file ({{openfile:...}}) */
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 6px 2px 0;
+  padding: 5px 12px;
+  background: var(--bg-card);
+  color: var(--gold-400);
+  border: 1px solid var(--gold-500);
+  border-radius: 999px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.file-chip:hover {
+  background: var(--accent-light);
+}
+
 /* IDE Container - 5-column CSS Grid Layout (with resize handle) */
 .ide-container {
   display: grid;

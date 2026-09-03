@@ -1985,6 +1985,9 @@ _WRITE_BLOCKED = {name.lower() for name in (
     "launch_ide.bat", "START_OPENCLAW_IDE.bat", ".gitignore",
 )}
 _MAX_WRITE_FILE_CHARS = 200000
+# (timestamp, relative-path) of recent agent writes, so handle_chat can append
+# clickable {{openfile:...}} chips to the reply the user sees in chat.
+_LAST_WRITES = []
 
 
 def write_project_file(rel_path, content=""):
@@ -2016,6 +2019,12 @@ def write_project_file(rel_path, content=""):
             f.write(content)
         os.replace(str(tmp), str(target))
         rel_out = str(target.relative_to(WORKSPACE_ROOT)).replace("\\", "/")
+        try:
+            _LAST_WRITES.append((time.time(), rel_out))
+            if len(_LAST_WRITES) > 40:
+                _LAST_WRITES[:] = _LAST_WRITES[-20:]
+        except Exception:
+            pass
         return {"ok": True, "path": rel_out,
                 "output": f"Wrote {len(content):,} chars to {rel_out}"}
     except Exception as e:
@@ -3864,6 +3873,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
         session = payload.get("session") or (
             "ses_" + time.strftime("%H%M%S") + "_" + str(int(time.time() * 1000))[-5:]
         )
+        # Clear the write registry so only THIS run's files become chat chips.
+        _LAST_WRITES.clear()
         if not agent_semaphore.acquire(blocking=False):
             self._send_json({"reply": "Another agent task is already running. "
                             "Wait for it to finish, then retry.", "busy": True})
@@ -3896,6 +3907,19 @@ class IDEHandler(SimpleHTTPRequestHandler):
             turn_trace = read_agent_trace(limit=60, session=session)
         except Exception:
             turn_trace = []
+        # Surface files the agent just wrote as clickable chips in the chat
+        # reply ({{openfile:rel}} is rendered by the frontend as an Open button).
+        # _LAST_WRITES was cleared when this run started, so every entry here
+        # belongs to this run.
+        try:
+            _re = __import__("re")  # handle_chat's local `import re` may not have run
+            have = set(_re.findall(r"\{\{openfile:([^}]*)\}\}", str(reply)))
+            missing = [rel for (_ts, rel) in _LAST_WRITES if rel not in have]
+            if missing:
+                reply = str(reply) + "\n\n" + "\n".join("{{openfile:" + r + "}}" for r in missing)
+            _LAST_WRITES.clear()
+        except Exception:
+            pass
         self._send_json({"reply": reply, "model": model, "session": session,
                          "rounds": turn_trace})
 
