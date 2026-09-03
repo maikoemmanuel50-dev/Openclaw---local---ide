@@ -275,10 +275,10 @@
       <div class="sidebar-view" id="viewAudio">
         <div class="sidebar-header">
           <h3>AUDIO ASSETS & TOOLS</h3>
-          <button class="icon-btn" id="btnRefreshAudio" title="Refresh audio files" onclick="loadAudioFiles()">↻</button>
+          <button class="icon-btn" id="btnRefreshAudio" title="Refresh audio files">↻</button>
         </div>
         <div class="audio-actions">
-          <button class="btn-tool" id="btnMicSidebar" title="Dictate into chat via speech recognition">🎤 Dictate into Chat</button>
+          <button class="btn-tool" id="btnMicSidebar" title="Dictate into chat via speech recognition" onclick="toggleSttMic()">🎤 Dictate into Chat</button>
         </div>
         <div class="audio-file-list" id="audioFileList">
           <div class="loading-state">Loading audio files...</div>
@@ -665,7 +665,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             Save Plan
           </button>
-          <button class="btn-history" id="btnMic" title="Dictate via microphone" onclick="toggleSttMic()">
+          <button class="btn-history" id="btnMic" title="Dictate via microphone">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
           </button>
           <span class="char-hint">Enter to send • Shift+Enter newline • paste or drop image → Vision 7B</span>

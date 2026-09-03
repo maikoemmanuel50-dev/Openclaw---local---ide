@@ -693,7 +693,7 @@ function renderImagePreviews() {
   pendingImages.forEach((img, i) => {
     const cell = document.createElement("div");
     cell.className = "image-preview-cell";
-    cell.innerHTML = `<img src="${img.dataUrl}" alt="${img.name}"><button class="img-remove" onclick="removePendingImage(${i})" title="Remove image">✕</button>`;
+    cell.innerHTML = `<img src="${img.dataUrl}" alt="${escapeHtml(img.name)}"><button class="img-remove" onclick="removePendingImage(${i})" title="Remove image">✕</button>`;
     elImagePreviews.appendChild(cell);
   });
   elImagePreviews.style.display = pendingImages.length ? "flex" : "none";
@@ -1071,7 +1071,7 @@ async function togglePromptHistory() {
       items.map(h => `
         <div class="p-history-item" title="${(h.prompt || '').replace(/"/g, '&quot;')}">
           <span class="p-history-ts">${h.ts || ''}</span>
-          <span class="p-history-text" onclick="reusePrompt(this)">${(h.prompt || '').slice(0, 110)}</span>
+          <span class="p-history-text" onclick="reusePrompt(this)">${escapeHtml((h.prompt || '').slice(0, 110))}</span>
         </div>
       `).join("");
   } catch (e) {
@@ -1323,8 +1323,13 @@ async function viewGuide(guideId) {
   const target = (data.guides || []).find(g => g.id === guideId);
   if (target) {
     elActiveFilePath.innerText = `Guide: ${target.title}`;
+    // Put the guide into the ACTIVE editor (Monaco when available, else the
+    // fallback textarea) so the preview shows the guide, not stale content.
+    if (window.monacoEditor) window.monacoEditor.setValue(target.content);
     elCodeEditor.value = target.content;
     isMarkdownPreview = true;
+    const monacoEl = document.getElementById("monacoEditor");
+    if (monacoEl) monacoEl.style.display = "none";
     elCodeEditor.classList.add("hidden");
     elMarkdownPreview.classList.remove("hidden");
     renderMarkdownPreview();
@@ -1589,8 +1594,16 @@ async function refreshCrestodian() {
   }
 }
 
-function verifyAttestation() {
-  showToast("🛡️ Crestodian: Workspace hash and session attested!");
+async function verifyAttestation() {
+  showToast("Checking Crestodian attestations…");
+  try {
+    const res = await fetch("/api/crestodian/status");
+    const data = await res.json();
+    const n = data.attestationsCount || 0;
+    showToast(`Crestodian: ${n} attestation(s) on file. Attest via the OpenClaw CLI if you need a new one.`);
+  } catch (e) {
+    showToast("Crestodian check failed: " + e.message, "error");
+  }
   refreshCrestodian();
 }
 
@@ -2032,7 +2045,14 @@ document.getElementById("sessionSearch")?.addEventListener("input", debounce(() 
 
 ["sessionModeFilter", "sessionStatusFilter", "sessionHasPlanFilter"].forEach(id => {
   document.getElementById(id)?.addEventListener("change", () => {
-    sessionSearchState[id.replace("session", "").replace("Filter", "").toLowerCase()] = document.getElementById(id).value || (document.getElementById(id).checked ? true : false);
+    const el = document.getElementById(id);
+    if (id === "sessionHasPlanFilter") {
+      // Checkbox: store the boolean, not the element's "on" value.
+      sessionSearchState.hasPlan = !!el.checked;
+    } else {
+      const key = id.replace("session", "").replace("Filter", "");
+      sessionSearchState[key.charAt(0).toLowerCase() + key.slice(1)] = el.value;
+    }
     sessionSearchState.page = 0;
     loadSessionsPage();
   });
@@ -2556,7 +2576,7 @@ function initTerminal() {
   xterm = new Terminal({ cursorBlink: true, cursorStyle: 'bar', fontSize: 14, fontFamily: 'Fira Code, monospace',
     theme: { background: '#1a1a1a', foreground: '#ffffff', cursor: '#ffffff', selectionBackground: '#264f78' }, allowProposedApi: true });
   var fitAddon = new FitAddon.FitAddon(); xterm.loadAddon(fitAddon); xterm.open(container); fitAddon.fit();
-  xtermWs = new WebSocket('ws://127.0.0.1:8766');
+  xtermWs = new WebSocket('ws://' + location.hostname + ':8766');
   xtermWs.onopen = function() { xterm.writeln('\x1b[32mTerminal connected\x1b[0m'); };
   xtermWs.onmessage = function(event) {
     try { var d = JSON.parse(event.data); if (d.type === 'file.changed') { var cf = document.getElementById('activeFilePath'); if (cf && event.data.indexOf(cf.textContent) !== -1) { openFile(cf.textContent); showToast('File updated externally', 'info'); } loadFileTree(); return; } } catch(e) {}

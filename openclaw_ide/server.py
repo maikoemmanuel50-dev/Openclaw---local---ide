@@ -341,7 +341,7 @@ if REFERENCE_PLANS_PATH.exists():
 VALID_PLAN_ACTIONS = {
     "render_all_scenes", "render_mp4", "assemble_final",
     "assemble_with_audio", "assemble_kinetic_preview",
-    "render_4k", "run_1080_then_4k", "brainstorm",
+    "render_4k", "run_1080_then_4k",
     "ping_qwen", "qwen_chat",
 }
 
@@ -353,9 +353,6 @@ ACTION_ALTERNATIVES = {
     "export_video": "assemble_final",
     "render": "render_mp4",
     "assemble": "assemble_final",
-    "brainstorm_concept": "brainstorm",
-    "generate_script": "brainstorm",
-    "create_storyboard": "brainstorm",
 }
 
 def validate_and_fix_plan(plan_json):
@@ -1453,6 +1450,14 @@ def gate_check(action_key, params):
 def execute_action(action_key, params=None):
     """Execute a gated, allowlisted action. Never runs arbitrary commands."""
     params = params or {}
+    if action_key not in EXEC_ACTIONS:
+        # Schema misuse: reject fast with the valid set so the model cannot
+        # recurse (run_action(action='run_action')) or route creative tools
+        # through run_action (brainstorm is its own tool).
+        return {"ok": False, "invalid": True,
+                "error": (f"Unknown action '{action_key}'. Valid actions are: "
+                          f"{', '.join(sorted(EXEC_ACTIONS))}. "
+                          "For ideas use the 'brainstorm' tool directly, not run_action.")}
     ok, reason = gate_check(action_key, params)
     if not ok:
         return {"ok": False, "blocked": GATE_BLOCKED_MSG, "reason": reason, "action": action_key}
@@ -1473,6 +1478,16 @@ def execute_action(action_key, params=None):
         env = dict(os.environ)
     else:
         env = None
+    # Give a clear error when the action's script does not exist in the ACTIVE
+    # workspace (scripts moved out of the IDE repo into their projects).
+    script_ref = action.get("script", "")
+    if script_ref:
+        probe = Path(script_ref) if Path(script_ref).is_absolute() else (WORKSPACE_ROOT / script_ref)
+        if not probe.exists():
+            return {"ok": False, "action": action_key,
+                    "error": (f"Action script '{script_ref}' is not present in the "
+                              f"active workspace ({WORKSPACE_ROOT}). Switch to the "
+                              "project that contains it (Project menu, top left).")}
     try:
         timeout = int(params.get("timeout", 600 if action.get("gate_cpu") else 120))
     except (TypeError, ValueError):
@@ -1498,8 +1513,23 @@ def execute_action(action_key, params=None):
         return {"ok": False, "action": action_key, "error": str(e)}
 
 
-HOURLY_REPORT_SCRIPT = str(Path(PROJECT_CONFIG.get("scriptsRoot", str(WORKSPACE_ROOT / "scripts"))) / "hourly_status_report.ps1")
-HOURLY_STATUS_FILE = str(Path(PROJECT_CONFIG.get("scriptsRoot", str(WORKSPACE_ROOT))).parent / "STATUS_HOURLY_LATEST.txt")
+def _recompute_ws_paths():
+    """Rebuild project-root-relative path globals (hourly report + audio root)
+    from the CURRENT config/workspace. Targets are WORKSPACE_ROOT-absolute,
+    never process-CWD-relative (the watchdog launches with CWD = repo root)."""
+    global HOURLY_REPORT_SCRIPT, HOURLY_STATUS_FILE, AUDIO_ROOTS
+    scripts_rel = PROJECT_CONFIG.get("scriptsRoot") or "scripts"
+    sp = Path(scripts_rel)
+    scripts_root = sp if sp.is_absolute() else (WORKSPACE_ROOT / sp)
+    HOURLY_REPORT_SCRIPT = str(scripts_root / "hourly_status_report.ps1")
+    HOURLY_STATUS_FILE = str(WORKSPACE_ROOT / "STATUS_HOURLY_LATEST.txt")
+    rr = Path(RENDER_ROOT).resolve() if RENDER_ROOT else (WORKSPACE_ROOT / "renders")
+    AUDIO_ROOTS = [
+        str(rr.parent / "assets" / "audio"),
+        str(WORKSPACE_ROOT / "assets" / "audio"),
+    ]
+
+_recompute_ws_paths()
 
 
 def run_hourly_report(blocking=True):
@@ -1530,9 +1560,7 @@ def read_hourly_latest():
         return {"ok": False, "error": str(e)}
 
 
-AUDIO_ROOTS = [
-    str(Path(PROJECT_CONFIG.get("renderRoot", str(WORKSPACE_ROOT / "renders"))).parent / "assets" / "audio"),
-]
+AUDIO_ROOTS = []  # rebuilt by _recompute_ws_paths() above (WORKSPACE_ROOT-based)
 
 
 def _audio_relative(path):
@@ -1904,7 +1932,94 @@ AGENT_TOOLS = [
             "category": "creative",
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Create or overwrite a UTF-8 text file INSIDE the active project workspace (path is relative to the workspace root; nested folders are created automatically). Use it to save scripts, storyboards, markdown docs, notes, or JSON the user asks you to produce. Protected files (server.py, app.js, index.html, style.css, project.json, projects.json, AGENTS.md, watchdog files, .gitignore, etc.) and any path outside the workspace are refused.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative file path inside the workspace, e.g. docs/episode_1_script.md or src/scene_01.py"},
+                    "content": {"type": "string", "description": "Full text content to write to the file"},
+                },
+                "required": ["path", "content"],
+            },
+            "category": "content",
+        },
+    },
 ]
+
+
+def _brainstorm_chat(topic):
+    """One-shot creative brainstorming chat on the local VL model."""
+    if not topic:
+        return {"ok": False, "error": "No topic provided"}
+    try:
+        payload = {
+            "model": _VL_MODEL,
+            "stream": False,
+            "keep_alive": 60,
+            "options": {"temperature": 0.7, "num_ctx": 8192, "num_predict": 512},
+            "messages": [
+                {"role": "system", "content": "You are a creative production assistant. Answer the user's question directly and helpfully. Be concise but thorough. Help with series planning, brainstorming, scripting, and creative ideation for ANY project."},
+                {"role": "user", "content": topic},
+            ],
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(f"{OLLAMA_HOST}/api/chat", data=data,
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        reply = (result.get("message") or {}).get("content", "")
+        return {"ok": True, "reply": reply, "topic": topic}
+    except Exception as e:
+        return {"ok": False, "error": str(e), "topic": topic}
+
+
+# Files the agent may never overwrite through write_file (IDE / config files).
+_WRITE_BLOCKED = {name.lower() for name in (
+    "server.py", "app.js", "index.html", "style.css", "state_store.py",
+    "projects.json", "project.json", "project.json.template",
+    "reference_plans.json", "AGENTS.md", "watchdog_ide.ps1",
+    "launch_ide.bat", "START_OPENCLAW_IDE.bat", ".gitignore",
+)}
+_MAX_WRITE_FILE_CHARS = 200000
+
+
+def write_project_file(rel_path, content=""):
+    """Scoped file writer for the agent (Build mode).
+
+    Creates/overwrites a TEXT file inside the ACTIVE workspace only:
+    - path must resolve inside WORKSPACE_ROOT (same guard as handle_file_save)
+    - the basename may not be an IDE/config file (server.py, project.json, ...)
+    - content length is capped; writes are atomic (temp + os.replace).
+    """
+    if not isinstance(rel_path, str) or not rel_path.strip():
+        return {"ok": False, "error": "write_file requires a 'path' (relative to the workspace)."}
+    if not isinstance(content, str):
+        content = str(content)
+    if len(content) > _MAX_WRITE_FILE_CHARS:
+        return {"ok": False, "error": f"Content too large ({len(content)} chars, max {_MAX_WRITE_FILE_CHARS})."}
+    if Path(rel_path).name.lower() in _WRITE_BLOCKED:
+        return {"ok": False,
+                "error": f"'{Path(rel_path).name}' is a protected IDE/config file and cannot be written by the agent."}
+    target = (WORKSPACE_ROOT / rel_path).resolve()
+    try:
+        target.relative_to(WORKSPACE_ROOT)
+    except ValueError:
+        return {"ok": False, "error": f"Access denied: path escapes the workspace -> {target}"}
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp = target.with_suffix(target.suffix + ".tmp")
+        with open(str(tmp), "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(str(tmp), str(target))
+        rel_out = str(target.relative_to(WORKSPACE_ROOT)).replace("\\", "/")
+        return {"ok": True, "path": rel_out,
+                "output": f"Wrote {len(content):,} chars to {rel_out}"}
+    except Exception as e:
+        return {"ok": False, "error": f"write_file failed: {e}"}
 
 
 def dispatch_tool(name, args):
@@ -1912,6 +2027,8 @@ def dispatch_tool(name, args):
         return {"status": get_render_progress(), "battery": get_battery_info()}
     if name == "get_project_state":
         return get_project_state()
+    if name == "write_file":
+        return write_project_file(args.get("path", ""), args.get("content", ""))
     if name == "read_log":
         try:
             nlines = int(args.get("lines", 30))
@@ -1919,7 +2036,15 @@ def dispatch_tool(name, args):
             nlines = 30
         return read_log_tail(args.get("log", "wait_hq_assemble_log.txt"), nlines)
     if name == "run_action":
-        return execute_action(args.get("action", ""), args)
+        action = args.get("action", "")
+        if action == "brainstorm":
+            # The model sometimes routes creative ideas through run_action.
+            # brainstorm is a chat tool, not a shell action: serve it here so
+            # it never surfaces as "Unknown action" (which caused recursion).
+            nested = args.get("action_params") or {}
+            topic = args.get("text") or nested.get("topic") or ""
+            return _brainstorm_chat(topic)
+        return execute_action(action, args)
     if name == "shell_probe":
         return execute_shell_probe(args.get("alias", ""))
     if name == "inspect_image":
@@ -1929,33 +2054,7 @@ def dispatch_tool(name, args):
     if name == "escalate_openclaw":
         return escalation_openclaw(args.get("task", ""))
     if name == "brainstorm":
-        topic = args.get("topic", "")
-        if not topic:
-            return {"ok": False, "error": "No topic provided"}
-        try:
-            payload = {
-                "model": _VL_MODEL,
-                "stream": False,
-                "keep_alive": 60,
-            "options": {"temperature": 0.7, "num_ctx": 8192, "num_predict": 512},
-                "messages": [
-                    {"role": "system", "content": "You are a creative production assistant. Answer the user's question directly and helpfully. Be concise but thorough. Help with series planning, brainstorming, scripting, and creative ideation for ANY project."},
-                    {"role": "user", "content": topic},
-                ],
-            }
-            data = json.dumps(payload).encode("utf-8")
-            req = urllib.request.Request(
-                f"{OLLAMA_HOST}/api/chat",
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-            reply = (result.get("message") or {}).get("content", "")
-            return {"ok": True, "reply": reply, "topic": topic}
-        except Exception as e:
-            return {"ok": False, "error": str(e), "topic": topic}
+        return _brainstorm_chat(args.get("topic", ""))
     # Fallback: route production action names (qwen_chat, ping_qwen, etc.)
     # through run_action so content-printed tool calls don't error.
     if name in EXEC_ACTIONS:
@@ -2524,11 +2623,12 @@ DEEP_PLAN_PROMPT = (
     "CRITICAL RULES:\n"
     "1. ALWAYS call get_project_state FIRST to understand current project state.\n"
     "2. NEVER ask the user questions — use tools to gather all context.\n"
-    "3. ONLY use actions from this list: render_all_scenes, render_mp4, assemble_final, assemble_with_audio, assemble_kinetic_preview, render_4k, run_1080_then_4k, brainstorm, ping_qwen, qwen_chat\n"
+    "3. ONLY use actions from this list (plan labels only — do NOT try to run them here): render_all_scenes, render_mp4, assemble_final, assemble_with_audio, assemble_kinetic_preview, render_4k, run_1080_then_4k, ping_qwen, qwen_chat\n"
     "4. Plans must be immediately actionable with existing tools.\n"
     "5. Estimate time based on actual render complexity, not generic placeholders.\n"
     "6. Reference the example plans below for structure and quality.\n"
-    "7. Adapt the plan to the user's specific project details.\n\n"
+    "7. Adapt the plan to the user's specific project details.\n"
+    "8. PLANNING ONLY: you must NEVER call run_action or escalate_openclaw while planning — return the plan JSON only.\n\n"
     "REFERENCE EXAMPLES (learn structure and quality from these):\n\n"
     "### Example 1: Documentary Short Film\n"
     "Description: 30-min interview-based documentary with B-roll footage\n"
@@ -3006,6 +3106,7 @@ def save_project_config(updates):
 def switch_project(project_path):
     """Switch the active workspace to a different project directory."""
     global WORKSPACE_ROOT, IDE_ROOT, RENDER_ROOT, PROJECT_CONFIG, _INDEX_INITIALIZED, GUIDES_ROOT
+    global HOURLY_REPORT_SCRIPT, HOURLY_STATUS_FILE, AUDIO_ROOTS
     p = Path(project_path).resolve()
     if not p.exists() or not p.is_dir():
         return {"ok": False, "error": f"Directory not found: {project_path}"}
@@ -3017,6 +3118,7 @@ def switch_project(project_path):
     _apply_state_paths()
     _INDEX_INITIALIZED = False
     GUIDES_ROOT = (WORKSPACE_ROOT / "docs" / "guides").resolve()
+    _recompute_ws_paths()
     # Invalidate the /api/status cache so the next poll reflects the new project.
     _STATUS_CACHE["ts"] = 0.0
     _STATUS_CACHE["data"] = None
@@ -3129,7 +3231,13 @@ class IDEHandler(SimpleHTTPRequestHandler):
         elif path == "/api/files/read":
             self.handle_file_read(query.get("path", [""])[0])
         elif path == "/api/logs/tail":
-            self.handle_logs_tail(query.get("file", ["wait_hq_assemble_log.txt"])[0], int(query.get("lines", [50])[0]))
+            try:
+                _nlines = int(query.get("lines", ["50"])[0])
+            except (TypeError, ValueError):
+                _nlines = 50
+            self.handle_logs_tail(query.get("file", ["wait_hq_assemble_log.txt"])[0], _nlines)
+        elif path == "/api/agent/tools":
+            self.handle_agent_tools()
         elif path == "/api/guides":
             self.handle_guides()
         elif path == "/api/pipeline":
@@ -3291,6 +3399,26 @@ class IDEHandler(SimpleHTTPRequestHandler):
             _CANCELLED.add(session)
         self._send_json({"ok": True, "cancelled": session})
 
+    def handle_agent_tools(self):
+        """List gated executable actions, shell probes and gate state."""
+        gate_cfg = PROJECT_CONFIG.get("gates") or {}
+        probes = [alias for alias, _desc in ALLOWED_SHELL_PATTERNS]
+        actions = [{
+            "key": key,
+            "desc": meta.get("desc", ""),
+            "kind": meta.get("kind"),
+            "gates": sorted(g for g in ("gate_cpu", "gate_blender", "gate_4k_hold") if meta.get(g)),
+            "terminal": bool(meta.get("terminal")),
+        } for key, meta in EXEC_ACTIONS.items()]
+        self._send_json({
+            "tools": sorted(EXEC_ACTIONS.keys()),
+            "actions": actions,
+            "shellProbes": probes,
+            "gates": gate_cfg,
+            "ollama": fetch_ollama_tags(),
+            "model": resolve_default_model(),
+        })
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -3408,7 +3536,16 @@ class IDEHandler(SimpleHTTPRequestHandler):
         ollama = ping_ollama()
         gateway_ok = is_port_open(18789)
         power = get_power_state()
-        disk = shutil.disk_usage(str(RENDER_ROOT))
+        # Disk check must not crash when the project's renderRoot does not
+        # exist yet (e.g. a freshly scaffolded project).
+        disk = None
+        for probe in (RENDER_ROOT, WORKSPACE_ROOT):
+            try:
+                if probe.exists():
+                    disk = shutil.disk_usage(str(probe))
+                    break
+            except Exception:
+                continue
         
         checks = {
             "ollama": {"ok": ollama.get("online"), "detail": f"{len(ollama.get('models', []))} models available"},
@@ -3417,8 +3554,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
                         "detail": f"{status.get('readyCount', 0)}/{status.get('totalScenes', 0)} scenes ready"},
             "power": {"ok": battery.get("percent", 0) > 20 or "AC" in battery.get("status", ""), 
                       "detail": f"{battery.get('percent')}% ({battery.get('status')})"},
-            "disk": {"ok": disk.free > 10 * 1024**3,  # 10GB minimum
-                     "detail": f"{round(disk.free / 1024**3, 1)} GB free"},
+            "disk": {"ok": disk is None or disk.free > 10 * 1024**3,  # 10GB minimum
+                     "detail": "unavailable" if disk is None else f"{round(disk.free / 1024**3, 1)} GB free"},
             "sleep": {"ok": power.get("sleep", {}).get("ac") == "never" and power.get("hibernate", {}).get("ac") == "never",
                       "detail": "Sleep/hibernate disabled" if power.get("sleep", {}).get("ac") == "never" else "Sleep active - may interrupt renders"}
         }
@@ -3791,6 +3928,9 @@ class IDEHandler(SimpleHTTPRequestHandler):
         best_text = ""  # accumulated model prose; never a bare tool-call JSON
         tool_history = []  # (name, args_hash) persistent across rounds
         blocked_streak = 0
+        invalid_streak = 0   # consecutive schema-misuse (invalid) tool calls
+        tool_name_counts = {}  # total calls per tool name across the loop
+        plan_nudges = 0  # planning-only rounds that tried to execute a tool
         trace_agent({"event": "loop.start", "model": model, "session": session,
                      "prompt": str(messages[1].get("content", ""))[:300] if len(messages) > 1 else ""})
         
@@ -3908,8 +4048,38 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 tool_calls = content_calls
             print(f"[agent-loop] content_calls: {[tc.get('function', {}).get('name') for tc in content_calls]} | tool_calls: {[tc.get('function', {}).get('name') for tc in tool_calls]}", flush=True)
 
+            # Hard-enforce the round's OFFERED tool set. Content-printed calls
+            # can bypass the prompt's tool list (planning-only mode, or
+            # single-shot tools already consumed), so filter them here again.
+            offered_names = {t["function"]["name"] for t in (filtered_tools or AGENT_TOOLS)}
+            tool_calls = [tc for tc in tool_calls
+                          if (tc.get("function") or {}).get("name") in offered_names]
+
             if not tool_calls:
-                return content.strip()
+                body = re.sub(r"```json\s*\{.*?\}\s*```", "", (content or "").strip(),
+                              flags=re.DOTALL).strip()
+                if planning_only:
+                    # Distinguish a real plan (prose or plan-JSON with "phases")
+                    # from leftover tool-call JSON the model printed.
+                    looks_like_tool_json = '"arguments"' in body and '"name"' in body
+                    if body and not looks_like_tool_json:
+                        return body
+                    # The model reached for an execution tool while planning.
+                    # Nudge it (bounded) to WRITE THE PLAN as prose instead of
+                    # ending the turn on a bare "tools disabled" note.
+                    plan_nudges += 1
+                    if plan_nudges >= 3:
+                        return ("I still don't have a written plan. Please write the "
+                                "full production plan as markdown now — phases, tasks, "
+                                "deliverables, time estimates. No tools are needed.")
+                    messages.append({"role": "user", "content":
+                        "[system] You are in PLANNING mode and execution tools are "
+                        "disabled — do NOT call run_action or escalate. If you have "
+                        "enough context, write the complete plan now as prose/markdown "
+                        "(or the JSON plan you were asked for). Do not reply with only "
+                        "this system note."})
+                    continue
+                return body or "Agent produced no tool call or text."
 
             print(f"[agent-loop] round: calling {[ (tc.get('function') or {}).get('name') for tc in tool_calls ]}", flush=True)
 
@@ -3974,6 +4144,33 @@ class IDEHandler(SimpleHTTPRequestHandler):
                 args_hash = hash(json.dumps(args, sort_keys=True, default=str))
                 tool_history.append((name, args_hash))
                 tool_result = dispatch_tool(name, args)
+
+                # ── Anti-runaway guards ──────────────────────────────
+                tool_name_counts[name] = tool_name_counts.get(name, 0) + 1
+                if tool_result.get("invalid"):
+                    invalid_streak += 1
+                    trace_agent({"event": "loop.invalid_tool", "round": round_i,
+                                 "session": session, "tool": name,
+                                 "error": str(tool_result.get("error"))[:200]})
+                else:
+                    invalid_streak = 0
+                if invalid_streak >= 2:
+                    trace_agent({"event": "loop.invalid_break", "round": round_i,
+                                 "session": session})
+                    return ("The agent repeatedly tried invalid tool calls "
+                            "(unknown/unrunnable actions) instead of doing real "
+                            "work, so the loop stopped to avoid runaway nesting.\n\n"
+                            "Valid run_action actions are: "
+                            + ", ".join(sorted(EXEC_ACTIONS))
+                            + ".\nUse 'brainstorm' for ideas, 'get_project_state'/"
+                            "production_status for status, or just answer directly.")
+                if tool_name_counts.get(name, 0) >= 4:
+                    trace_agent({"event": "loop.tool_spin", "round": round_i,
+                                 "session": session, "tool": name})
+                    return (f"Stopped: the agent kept calling the same tool "
+                            f"('{name}') without making progress. Rephrase the "
+                            "request, or use /api/mission for a step-by-step run.")
+
                 round_names.append(name)
                 round_results.append((name, args, tool_result))
                 all_round_results.append((name, args, tool_result))
@@ -4596,8 +4793,9 @@ class IDEHandler(SimpleHTTPRequestHandler):
 
     def handle_guides(self):
         guides = load_guides_catalog()
-        if not guides:
-            guides = LEGACY_GUIDES
+        # No stale hard-coded fallback: without project docs/guides the panel
+        # simply shows an empty catalog (old LEGACY_GUIDES referenced files
+        # that no longer exist in this repo).
         guides.sort(key=lambda g: (g.get("category", "").lower(), g.get("title", "").lower()))
         self._send_json({"guides": guides, "count": len(guides)})
 
