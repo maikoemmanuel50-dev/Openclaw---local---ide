@@ -1948,6 +1948,22 @@ AGENT_TOOLS = [
             "category": "content",
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_creative_file",
+            "description": "Generate RICH, polished prose with the creative writing model and save it as a file INSIDE the active project workspace. Use for written artifacts the user asks to create: scripts, storyboards, synopses, outlines, notes, markdown docs. The server writes the file for you with the same workspace-bounded guards as write_file (protected IDE/config files are refused). Args: path (relative, e.g. docs/script.md) and request (what to write, subject + style + detail). After it returns, mention the file to the user.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative file path inside the workspace, e.g. docs/episode_1_script.md"},
+                    "request": {"type": "string", "description": "Describe the document to write, e.g. 'a one-page opening script for a 7-minute animated film about a young coder in Nairobi'"},
+                },
+                "required": ["path", "request"],
+            },
+            "category": "content",
+        },
+    },
 ]
 
 
@@ -2031,6 +2047,43 @@ def write_project_file(rel_path, content=""):
         return {"ok": False, "error": f"write_file failed: {e}"}
 
 
+def _creative_generate(request_text):
+    """Full-document prose from the local vision/creative model."""
+    if not request_text or not str(request_text).strip():
+        return None, "A description of what to write is required."
+    try:
+        payload = {
+            "model": _VL_MODEL,
+            "stream": False,
+            "keep_alive": 60,
+            "options": {"temperature": 0.8, "num_ctx": 8192, "num_predict": 2200},
+            "messages": [
+                {"role": "system", "content": ("You are a professional creative writer for video and content "
+                    "production. Write the FULL requested document - script, storyboard, synopsis, outline or "
+                    "notes - as polished, structured markdown. Do not add meta-commentary, do not wrap the "
+                    "content in code fences, and do not stop early: deliver the complete document.")},
+                {"role": "user", "content": str(request_text)},
+            ],
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(f"{OLLAMA_HOST}/api/chat", data=data,
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=240) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        text = (result.get("message") or {}).get("content", "").strip()
+        return (text or None), (None if text else "Creative model returned an empty document.")
+    except Exception as e:
+        return None, f"Creative generation failed: {e}"
+
+
+def write_creative_file(path, request_text):
+    """Generate prose with the creative model, then save it via write_file guards."""
+    text, err = _creative_generate(request_text)
+    if err:
+        return {"ok": False, "error": err}
+    return write_project_file(path, text)
+
+
 def dispatch_tool(name, args):
     if name == "production_status":
         return {"status": get_render_progress(), "battery": get_battery_info()}
@@ -2038,6 +2091,8 @@ def dispatch_tool(name, args):
         return get_project_state()
     if name == "write_file":
         return write_project_file(args.get("path", ""), args.get("content", ""))
+    if name == "write_creative_file":
+        return write_creative_file(args.get("path", ""), args.get("request", ""))
     if name == "read_log":
         try:
             nlines = int(args.get("lines", 30))
