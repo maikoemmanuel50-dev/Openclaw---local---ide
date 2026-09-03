@@ -1,2 +1,0 @@
-Gscatter - props.py:40 - INFO: Creating first entry
-Gscatter - callbacks.py:90 - INFO: No Duplicates Found.

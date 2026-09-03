@@ -27,23 +27,40 @@ from pathlib import Path
 DEFAULT_WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE_ROOT = Path(DEFAULT_WORKSPACE).resolve()
 IDE_ROOT = (WORKSPACE_ROOT).resolve()
+# Static web root for the IDE itself (the folder this server.py lives in).
+# Must NOT follow switch_project: project switches change WORKSPACE_ROOT for the
+# file/workspace APIs, but the IDE's own HTML/JS/CSS always comes from here --
+# otherwise '/' serves the project folder (which has no index.html) and the UI
+# becomes a directory listing, i.e. "IDE not accessible".
+WEB_ROOT = Path(__file__).resolve().parent
+
+# ── Per-project isolated runtime state ─────────────────────────────────
+# Sessions, prompt history, agent traces, chat memory and the session
+# search index are stored per ACTIVE project under project_state/<slug>/,
+# so switching projects never mixes sessions between workspaces.
+STATE_ROOT = WEB_ROOT / "project_state"
+# Registered external project workspaces (see projects.json next to server.py).
+PROJECTS_REGISTRY = WEB_ROOT / "projects.json"
+
+def _apply_state_paths():
+    """Point every per-project runtime state file at the active project."""
+    global SESSION_MEMORY_PATH, PROMPT_LOG_PATH, AGENT_TRACE_PATH, INDEX_DB
+    slug = re.sub(r'[^\w\-]', '_', WORKSPACE_ROOT.name or "default") or "default"
+    state_dir = STATE_ROOT / slug
+    state_dir.mkdir(parents=True, exist_ok=True)
+    SESSION_MEMORY_PATH = state_dir / ".session_memory.json"
+    PROMPT_LOG_PATH = (state_dir / ".prompt_log.jsonl").resolve()
+    AGENT_TRACE_PATH = (state_dir / ".agent_trace.jsonl").resolve()
+    INDEX_DB = str((state_dir / ".session_index.db").resolve())
+
+_apply_state_paths()
 
 # #region agent log
 _DEBUG_LOG_PATH = (Path(DEFAULT_WORKSPACE).resolve().parent / "debug-c6d300.log")
 def _agent_dbg(hypothesis_id, location, message, data=None):
-    try:
-        payload = {
-            "sessionId": "c6d300",
-            "hypothesisId": hypothesis_id,
-            "location": location,
-            "message": message,
-            "data": data or {},
-            "timestamp": int(time.time() * 1000),
-        }
-        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as _df:
-            _df.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
-    except Exception:
-        pass
+    # Left-over hypothesis-debug telemetry: intentionally a no-op so it stops
+    # (re)creating debug-c6d300.log at the repo root. Kept for call-site compat.
+    pass
 def _safe_print(*args, **kwargs):
     """print() that never crashes the request handler (broken redirected stdout)."""
     try:
@@ -97,7 +114,7 @@ def load_project_config():
     else:
         # Priority 3: Auto-discover from workspace
         PROJECT_CONFIG = {
-            "name": "OpenClaw Project",
+            "name": WORKSPACE_ROOT.name or "OpenClaw Project",
             "episode": "",
             "renderRoot": str(WORKSPACE_ROOT / "renders"),
             "scriptsRoot": str(WORKSPACE_ROOT / "scripts"),
@@ -262,7 +279,7 @@ def copyright_protocol_prompt():
 # ── Prompt retention & archiving ────────────────────────────────────────
 # Every prompt sent through `/api/chat` is appended to a rolling JSONL so
 # history survives a page refresh (the browser DOM does not persist it).
-PROMPT_LOG_PATH = (WORKSPACE_ROOT / ".prompt_log.jsonl").resolve()
+# (PROMPT_LOG_PATH is set per-project by _apply_state_paths().)
 
 
 def log_prompt(entry):
@@ -308,12 +325,7 @@ def read_prompt_history(limit=20):
 
 
 # ── Agent-loop execution trace (for debugging feedback/error loops) ─────
-AGENT_TRACE_PATH = (WORKSPACE_ROOT / ".agent_trace.jsonl").resolve()
-
-# Ensure trace file exists on startup
-AGENT_TRACE_PATH.parent.mkdir(parents=True, exist_ok=True)
-if not AGENT_TRACE_PATH.exists():
-    AGENT_TRACE_PATH.touch()
+# (AGENT_TRACE_PATH is set per-project by _apply_state_paths().)
 
 
 # ── Reference Plans for Deep Plan Mode ──────────────────────────────
@@ -481,7 +493,8 @@ def execute_mission_with_feedback(plan_json, session):
 
 
 # ── Cross-Session Memory ────────────────────────────────────────────
-SESSION_MEMORY_PATH = IDE_ROOT / ".session_memory.json"
+# (SESSION_MEMORY_PATH is set per-project by _apply_state_paths().)
+_SESSION_MEMORY_LOCK = threading.Lock()
 
 def load_session_memory():
     """Load persistent session memory."""
@@ -494,35 +507,39 @@ def load_session_memory():
     return {"projects": {}, "preferences": {}, "history": []}
 
 def save_session_memory(memory):
-    """Save session memory to disk."""
+    """Save session memory to disk (atomic temp+replace)."""
+    tmp = SESSION_MEMORY_PATH.with_suffix(".tmp")
     try:
-        with open(SESSION_MEMORY_PATH, "w", encoding="utf-8") as f:
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(memory, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, SESSION_MEMORY_PATH)
     except Exception:
         pass
 
 def remember_project(session_id, project_info):
     """Remember project details across sessions."""
-    memory = load_session_memory()
-    memory["projects"][session_id] = {
-        "name": project_info.get("name", ""),
-        "type": project_info.get("type", ""),
-        "details": project_info.get("details", {}),
-        "plan": project_info.get("plan"),
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
-    # Keep last 50 projects
-    keys = list(memory["projects"].keys())
-    if len(keys) > 50:
-        for k in keys[:len(keys) - 50]:
-            del memory["projects"][k]
-    save_session_memory(memory)
+    with _SESSION_MEMORY_LOCK:
+        memory = load_session_memory()
+        memory["projects"][session_id] = {
+            "name": project_info.get("name", ""),
+            "type": project_info.get("type", ""),
+            "details": project_info.get("details", {}),
+            "plan": project_info.get("plan"),
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        # Keep last 50 projects
+        keys = list(memory["projects"].keys())
+        if len(keys) > 50:
+            for k in keys[:len(keys) - 50]:
+                del memory["projects"][k]
+        save_session_memory(memory)
 
 def remember_preference(key, value):
     """Remember user preferences."""
-    memory = load_session_memory()
-    memory["preferences"][key] = value
-    save_session_memory(memory)
+    with _SESSION_MEMORY_LOCK:
+        memory = load_session_memory()
+        memory["preferences"][key] = value
+        save_session_memory(memory)
 
 def get_remembered_projects():
     """Get all remembered projects for context."""
@@ -537,6 +554,14 @@ def trace_agent(entry):
         line = json.dumps(entry, ensure_ascii=False, default=str) + "\n"
         with open(str(AGENT_TRACE_PATH), "a", encoding="utf-8") as f:
             f.write(line)
+        # Rotate when the trace grows large so tail reads stay bounded.
+        try:
+            if AGENT_TRACE_PATH.stat().st_size > 2 * 1024 * 1024:  # 2 MB
+                stamp = time.strftime("%Y%m%d_%H%M%S")
+                os.replace(str(AGENT_TRACE_PATH),
+                           str(AGENT_TRACE_PATH.with_suffix(f".{stamp}.jsonl")))
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -549,7 +574,13 @@ def read_agent_trace(limit=40, session=None):
     if not AGENT_TRACE_PATH.exists():
         return []
     try:
-        with open(str(AGENT_TRACE_PATH), "r", encoding="utf-8") as f:
+        # Tail-read only the last ~256 KB instead of the whole (unbounded) file.
+        size = AGENT_TRACE_PATH.stat().st_size
+        tail_bytes = min(size, 256 * 1024)
+        with open(str(AGENT_TRACE_PATH), "r", encoding="utf-8", errors="replace") as f:
+            f.seek(size - tail_bytes)
+            if size - tail_bytes > 0:
+                f.readline()  # drop the partial first line from the seek
             lines = [l for l in f if l.strip()]
         records = []
         for l in lines[-300:]:
@@ -1203,6 +1234,14 @@ _TAGS_CACHE = {"ts": 0.0, "data": None}
 _TAGS_TTL = 2.0  # seconds; status is polled constantly, Ollama rarely changes
 _STATUS_CACHE = {"ts": 0.0, "data": None}  # /api/status ~2s cache (per-process)
 
+# Serialize agent-loop executions so concurrent chat/build requests don't
+# saturate the local Ollama model (one model can't serve N loops well).
+agent_semaphore = threading.Semaphore(1)
+
+# Sessions whose in-flight agent loop has been cancelled by the frontend.
+_CANCELLED = set()
+_CANCELLED_LOCK = threading.Lock()
+
 
 def fetch_ollama_tags(force=False):
     """Single shared /api/tags fetch with a short TTL so /api/status (polled
@@ -1434,7 +1473,10 @@ def execute_action(action_key, params=None):
         env = dict(os.environ)
     else:
         env = None
-    timeout = int(params.get("timeout", 600 if action.get("gate_cpu") else 120))
+    try:
+        timeout = int(params.get("timeout", 600 if action.get("gate_cpu") else 120))
+    except (TypeError, ValueError):
+        timeout = 600 if action.get("gate_cpu") else 120
     try:
         proc = subprocess.run(
             cmd, cwd=str(WORKSPACE_ROOT), capture_output=True,
@@ -1445,6 +1487,7 @@ def execute_action(action_key, params=None):
         return {
             "ok": proc.returncode == 0,
             "action": action_key,
+            "terminal": action.get("terminal", False),
             "exitCode": proc.returncode,
             "stdout": proc.stdout[-4000:],
             "stderr": proc.stderr[-2000:],
@@ -1653,7 +1696,7 @@ def clean_agent_reply(text):
     return text_s
 
 
-def escalation_openclaw(task_text, timeout=30):
+def escalation_openclaw(task_text, timeout=120):
     """Escalate a task to the OpenClaw gateway agent. Returns its reply text.
 
     Uses `openclaw agent -m <task> --json` via the local gateway (port 18789).
@@ -1870,7 +1913,11 @@ def dispatch_tool(name, args):
     if name == "get_project_state":
         return get_project_state()
     if name == "read_log":
-        return read_log_tail(args.get("log", "wait_hq_assemble_log.txt"), int(args.get("lines", 30)))
+        try:
+            nlines = int(args.get("lines", 30))
+        except (TypeError, ValueError):
+            nlines = 30
+        return read_log_tail(args.get("log", "wait_hq_assemble_log.txt"), nlines)
     if name == "run_action":
         return execute_action(args.get("action", ""), args)
     if name == "shell_probe":
@@ -2591,7 +2638,7 @@ import sqlite3
 import threading
 import atexit
 
-INDEX_DB = (WORKSPACE_ROOT / ".session_index.db").resolve()
+# (INDEX_DB is set per-project by _apply_state_paths().)
 _INDEX_LOCK = threading.Lock()
 _INDEX_INITIALIZED = False
 
@@ -2899,22 +2946,22 @@ def _read_log_tail_fast(log_path, line_count=50, max_bytes=131072):
 def list_projects():
     """List sub-folders in workspace root that look like projects."""
     projects = []
-    ws = WORKSPACE_ROOT.parent  # parent of openclaw_ide
     # Always include the current workspace
     projects.append({
         "name": PROJECT_CONFIG.get("name", "Current Workspace"),
         "path": str(WORKSPACE_ROOT),
         "active": True,
     })
-    # Scan siblings for other project folders
+    # Registered projects (see projects.json next to server.py).
     try:
-        for d in ws.iterdir():
-            if d.is_dir() and d != WORKSPACE_ROOT and not d.name.startswith("."):
-                # Check if it has project-like structure
-                if (d / "project.json").exists() or (d / "openclaw_ide").is_dir():
+        if PROJECTS_REGISTRY.exists():
+            registry = json.loads(PROJECTS_REGISTRY.read_text(encoding="utf-8"))
+            for entry in registry.get("projects", []):
+                p = Path(entry.get("path", "")).resolve()
+                if p.exists() and p.is_dir() and str(p) != str(WORKSPACE_ROOT):
                     projects.append({
-                        "name": d.name,
-                        "path": str(d),
+                        "name": entry.get("name") or p.name,
+                        "path": str(p),
                         "active": False,
                     })
     except Exception:
@@ -2924,13 +2971,21 @@ def list_projects():
 
 def switch_project(project_path):
     """Switch the active workspace to a different project directory."""
-    global WORKSPACE_ROOT, IDE_ROOT, RENDER_ROOT, PROJECT_CONFIG
+    global WORKSPACE_ROOT, IDE_ROOT, RENDER_ROOT, PROJECT_CONFIG, _INDEX_INITIALIZED, GUIDES_ROOT
     p = Path(project_path).resolve()
     if not p.exists() or not p.is_dir():
         return {"ok": False, "error": f"Directory not found: {project_path}"}
     WORKSPACE_ROOT = p
     IDE_ROOT = p
     load_project_config()
+    # Re-point per-project state (sessions/traces/memory/search) at the new
+    # project and force its FTS index to (re)build on first use.
+    _apply_state_paths()
+    _INDEX_INITIALIZED = False
+    GUIDES_ROOT = (WORKSPACE_ROOT / "docs" / "guides").resolve()
+    # Invalidate the /api/status cache so the next poll reflects the new project.
+    _STATUS_CACHE["ts"] = 0.0
+    _STATUS_CACHE["data"] = None
     return {"ok": True, "name": p.name, "path": str(p)}
 
 
@@ -2966,7 +3021,7 @@ def create_project(name):
 
 class IDEHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=str(IDE_ROOT), **kwargs)
+        super().__init__(*args, directory=str(WEB_ROOT), **kwargs)
 
     def do_GET(self):
         url = urllib.parse.urlparse(self.path)
@@ -3075,6 +3130,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
 
         if path == "/api/chat":
             self.handle_chat(payload)
+        elif path == "/api/chat/cancel":
+            self.handle_chat_cancel(payload)
         elif path == "/api/plan/save":
             self.handle_plan_save(payload)
         elif path == "/api/sessions/search":
@@ -3127,6 +3184,16 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json(create_project(payload.get("name", "")))
         else:
             self.send_error(404, "Unknown API endpoint")
+
+    def handle_chat_cancel(self, payload):
+        """Mark an in-flight agent-loop session as cancelled."""
+        session = payload.get("session", "")
+        if not session:
+            self._send_json({"ok": False, "error": "No session provided"}, 400)
+            return
+        with _CANCELLED_LOCK:
+            _CANCELLED.add(session)
+        self._send_json({"ok": True, "cancelled": session})
 
     def do_OPTIONS(self):
         self.send_response(200)
@@ -3296,7 +3363,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": "No path provided"}, 400)
             return
         target = (WORKSPACE_ROOT / rel_path).resolve()
-        if not str(target).startswith(str(WORKSPACE_ROOT)):
+        if not target.is_relative_to(WORKSPACE_ROOT):
             self._send_json({"error": "Access denied"}, 403)
             return
         try:
@@ -3315,7 +3382,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": "No path provided"}, 400)
             return
         target = (WORKSPACE_ROOT / rel_path).resolve()
-        if not str(target).startswith(str(WORKSPACE_ROOT)):
+        if not target.is_relative_to(WORKSPACE_ROOT):
             self._send_json({"error": "Access denied"}, 403)
             return
         try:
@@ -3564,7 +3631,14 @@ class IDEHandler(SimpleHTTPRequestHandler):
         session = payload.get("session") or (
             "ses_" + time.strftime("%H%M%S") + "_" + str(int(time.time() * 1000))[-5:]
         )
-        reply = self._run_agent_loop(messages, model, payload, session=session, mode=mode)
+        if not agent_semaphore.acquire(blocking=False):
+            self._send_json({"reply": "Another agent task is already running. "
+                            "Wait for it to finish, then retry.", "busy": True})
+            return
+        try:
+            reply = self._run_agent_loop(messages, model, payload, session=session, mode=mode)
+        finally:
+            agent_semaphore.release()
 
         if not reply:
             eta = render_eta()
@@ -3657,6 +3731,14 @@ class IDEHandler(SimpleHTTPRequestHandler):
             })
         
         for round_i in range(max_rounds):
+            # Honour a frontend cancel request (the fetch watchdog aborted the
+            # request, but the loop would otherwise keep running server-side).
+            with _CANCELLED_LOCK:
+                _cancelled = session in _CANCELLED
+            if _cancelled:
+                trace_agent({"event": "loop.cancelled", "round": round_i,
+                             "session": session})
+                return "Task cancelled from the frontend. Agent loop stopped."
             # Wall-clock guard: stop when budget spent, even with rounds left
             if time.time() - loop_start > wall_clock_limit:
                 print(f"[agent-loop] wall-clock {time.time()-loop_start:.0f}s > {wall_clock_limit}s -- stopping", flush=True)
@@ -4446,7 +4528,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         """Serve an individual scene Blender prompt."""
         url = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(url.query)
-        scene_id = query.get("scene", ["S01"])[0]
+        scene_id = query.get("scene", [""])[0]
         prompt_file = WORKSPACE_ROOT / "pipeline" / "prompts" / f"{scene_id}_blender.py"
         if not prompt_file.exists():
             self._send_json({"error": f"Prompt not found for {scene_id}"}, 404)
@@ -4465,7 +4547,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         contract path."""
         url = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(url.query)
-        scene_id = query.get("scene", ["S03"])[0]
+        scene_id = query.get("scene", [""])[0]
         exec_file = WORKSPACE_ROOT / "pipeline" / "exec" / f"{scene_id}_exec.json"
         if not exec_file.exists():
             self._send_json({"error": f"Exec plan not found for {scene_id}. Run generate_visual_pipeline.py first."}, 404)

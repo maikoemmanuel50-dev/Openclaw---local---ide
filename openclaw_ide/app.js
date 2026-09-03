@@ -35,9 +35,6 @@ const elToastContainer = document.getElementById("toastContainer");
 
 // Initialize on Load
 document.addEventListener("DOMContentLoaded", () => {
-  // #region agent log
-  fetch('http://127.0.0.1:7833/ingest/368ea75e-1629-4171-b0d2-00a2b6f4ff90',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6d300'},body:JSON.stringify({sessionId:'c6d300',location:'app.js:DOMContentLoaded',message:'ide_init',data:{href:location.href},timestamp:Date.now(),hypothesisId:'H0'})}).catch(()=>{});
-  // #endregion
   setupNavigation();
   setupEditor();
   setupChat();
@@ -107,14 +104,25 @@ function setupNavigation() {
       if (targetView) {
         targetView.classList.add("active");
       }
-      // #region agent log
-      const loaders = {
-        sessions: typeof loadSessionsPage,
-        readiness: typeof loadReadinessPanel,
-        planboard: typeof loadProjectPlan,
+      // Lazy-load the opened view's content, so panels don't sit on their
+      // loading spinners (previously navigation only swapped CSS classes).
+      const viewLoaders = {
+        sessions: "loadSessionsPage",
+        readiness: "loadReadinessPanel",
+        planboard: "loadProjectPlan",
+        render: "refreshSystemStatus",
+        trace: "loadAgentTrace",
+        trajectory: "loadTrajectory",
+        guides: "loadGuides",
+        copyright: "loadCopyrightPanel",
+        hourly: "loadHourlyPanel",
+        audio: "loadAudioFiles",
+        power: "loadPowerPanel",
       };
-      fetch('http://127.0.0.1:7833/ingest/368ea75e-1629-4171-b0d2-00a2b6f4ff90',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c6d300'},body:JSON.stringify({sessionId:'c6d300',location:'app.js:setupNavigation',message:'sidebar_view_click_no_loader_call',data:{viewId:viewId,loadersPresent:loaders,note:'setupNavigation does not invoke loadSessionsPage/loadReadinessPanel'},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
+      const loaderName = viewLoaders[viewId];
+      if (loaderName && typeof window[loaderName] === "function") {
+        try { window[loaderName](); } catch (e) { console.warn("view loader failed:", e); }
+      }
     });
   });
 
@@ -802,6 +810,7 @@ async function sendChat() {
   // trajectory data and render each round + its tool calls inline.
   const session = "ses_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const sessionBubbleId = appendSessionBubble();
+  chatInFlight = true;
   initThinkingStream(session);
 
   try {
@@ -840,6 +849,8 @@ async function sendChat() {
     renderSessionRounds(sessionBubbleId, rounds);
     appendChatBubble("assistant", reply);
     playChime("reply");
+    chatInFlight = false;
+    closeThinkingStream();
     
     // Auto-save Deep Plan to project.json
     if (currentEngineMode === "deep_plan" && data.reply) {
@@ -856,13 +867,28 @@ async function sendChat() {
     }
   } catch (e) {
     clearInterval(pollTimer);
+    chatInFlight = false;
+    closeThinkingStream();
     console.warn("Chat error:", e);
-    const retryPrompt = prompt.replace(/"/g, '&quot;');
-    updateChatBubble(
-      sessionBubbleId,
-      `⚠️ <strong>Connection Notice:</strong> ${e.message}<br><br>` +
-      `<button class="btn-quick" onclick="sendChipPrompt('${retryPrompt}')">🔄 Click to Retry</button>`
-    );
+    if (e.name === 'AbortError') {
+      fetch("/api/chat/cancel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session })
+      }).catch(() => {});
+    }
+    const errMsg = e.name === 'AbortError'
+      ? 'Timed out — the agent loop was cancelled.'
+      : `Connection Notice: ${e.message}`;
+    updateChatBubble(sessionBubbleId, `${errMsg}\n\nClick Retry below to try again.`);
+    const retryBubble = document.getElementById(sessionBubbleId);
+    if (retryBubble) {
+      const btn = document.createElement("button");
+      btn.className = "btn-quick";
+      btn.textContent = "Click to Retry";
+      btn.onclick = () => { sendChipPrompt(prompt); };
+      retryBubble.appendChild(btn);
+    }
     playChime("error");
   }
 }
@@ -1152,6 +1178,9 @@ function formatChatText(t) {
   
   // Parse code blocks ```lang\ncode\n``` into executable Action Cards
   const codeBlockRegex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+  // Escape all text now so model/user content can never inject HTML.
+  // Backticks (code fences) are intentionally left intact by escapeHtml.
+  t = escapeHtml(t);
   let formatted = t.replace(codeBlockRegex, (match, lang, code) => {
     const cleanCode = code.trim();
     const actionId = 'act_' + Math.random().toString(36).substring(2, 9);
@@ -1167,7 +1196,7 @@ function formatChatText(t) {
             ${isBashOrPs ? `<button class="btn-action-exec" onclick="executeActionCard('${actionId}')">▶️ Run Action</button>` : ''}
           </div>
         </div>
-        <div class="action-code" data-code="${escapedCode}">${escapeHtml(cleanCode)}</div>
+        <div class="action-code" data-code="${escapedCode}">${cleanCode}</div>
         <div class="action-result hidden" id="${actionId}_res"></div>
       </div>
     `;
@@ -2078,6 +2107,11 @@ function debounce(fn, ms) {
 
 // ── Thinking Stream (SSE) ────────────────────────────────────────────
 let thinkingEventSource = null;
+let chatInFlight = false;
+
+function closeThinkingStream() {
+  if (thinkingEventSource) { thinkingEventSource.close(); thinkingEventSource = null; }
+}
 
 function initThinkingStream(session) {
   if (thinkingEventSource) { thinkingEventSource.close(); }
@@ -2103,10 +2137,11 @@ function initThinkingStream(session) {
   };
   thinkingEventSource.onerror = function(err) {
     clearTimeout(connectionTimeout);
+    if (!chatInFlight) { closeThinkingStream(); return; }
     console.warn("SSE connection error:", err);
     var c = document.getElementById("thinkingContent");
     if (c) { c.innerHTML = '<div class="thinking-error">Stream disconnected. Reconnecting...</div>'; }
-    setTimeout(function() { initThinkingStream(session); }, 3000);
+    setTimeout(function() { if (chatInFlight) { initThinkingStream(session); } }, 3000);
   };
 }
 
@@ -2625,8 +2660,9 @@ async function switchProject(projectPath) {
     if (data.ok) {
       showToast("Switched to: " + (data.name || projectPath));
       localStorage.setItem("openclaw_last_project", projectPath);
-      loadFileTree();
-      refreshLog();
+      // Full reload so every panel (sessions, search, history, files, logs,
+      // plans) re-reads the active project's isolated state.
+      setTimeout(() => location.reload(), 400);
     } else {
       showToast("Switch failed: " + (data.error || ""), "error");
     }

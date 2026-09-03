@@ -1,17 +1,15 @@
-# AGENTS.md — Africa Season 1 Local IDE
+# AGENTS.md — OpenClaw Local IDE (project-neutral)
 
-Standalone workspace for the "Africa Season 1 — Silicon Savannah" production
-local IDE. Reorganized out of the live `Africa Season 1` folder; the live
-production folder remains the source of truth for renders and running jobs.
+The **OpenClaw Local IDE** is a project-neutral, multi-project local web IDE for
+AI-assisted production work. It is intentionally **not tied to any one
+project** — the Africa Season 1 production content was moved out (2026-09-03)
+to `C:\Users\HP\OneDrive\The Vault\Youtube\Africa Season 1`.
 
 ## What lives here
 
 - `openclaw_ide/` — the IDE web app (server.py, app.js, index.html, style.css).
-- `scripts/` — local Qwen client, watcher/assemble/render helpers.
-- `docs/`, `templates/`, `blend/`, `.cursor/`, `assets/` — project assets and
-  reference material (HDRI, audio, textures, diagrams, icons, yellow-ball SVGs).
-- Root `.py` / `.ps1` / `.bat` files — assemble, render, and delivery scripts.
-- `*._log.txt` — historical production logs (see `.gitignore`).
+- `START_OPENCLAW_IDE.bat` — launcher (starts the server and opens the browser).
+- `.gitignore` — repo hygiene (the Africa S1 `.bak`/logs are gone).
 
 ## How to run the IDE
 
@@ -20,126 +18,47 @@ START_OPENCLAW_IDE.bat
 ```
 
 Starts the multi-threaded server on `http://127.0.0.1:8765` and opens the
-browser. Requires Ollama running on port 11434 (default model
-`qwen2.5-coder:14b`).
+browser. Requires Ollama running on port 11434.
 
 Environment overrides (set before launching):
 
-- `AFRICA_WORKSPACE` — workspace root (default: this folder).
-- `AFRICA_RENDER_ROOT` — where render progress is read from
-  (default: live `Africa Season 1\renders`; scene progress shows live without
-  copying 2GB of frames).
 - `AFRICA_QWEN_HOST` / `AFRICA_QWEN_MODEL` — Ollama host / model.
 
-Server behavior:
+## Project model (multi-project, isolated)
 
-- On startup it warms up the Ollama model (`keep_alive=-1`) in a background
-  thread so the first chat does not cold-load — the model stays resident.
-- `/api/logs/tail` decodes log files robustly (UTF-16 BOM, misaligned appends,
-  UTF-8 with stray bad bytes) — the tail window is scored and the cleanest
-  decode is shown.
+The IDE is project-neutral: it hosts a **workspace switcher** and treats every
+project as an isolated unit. Projects are registered (Restaurant, Jenga,
+Africa Season 1, plus the current workspace) and each has its **own**:
 
-## Agentic executor (in-IDE)
+- session history and prompt log
+- agent traces and thinking stream
+- session search index
+- chat memory (`remember_project` / `remember_preference`)
+- saved plans
 
-`server.py` exposes a gated agent layer so the local Qwen model can actually
-act on the pipeline, with OpenClaw as the escalation layer for complex work.
+Switching project changes `WORKSPACE_ROOT` (which files/scripts the file APIs
+and agent actions operate on) but **never** the static web root — the IDE's
+HTML/JS/CSS always comes from `WEB_ROOT` (this repo's `openclaw_ide/`), so a
+project switch can never break the UI.
 
-Endpoints:
+## Runtime / server notes
 
-- `POST /api/chat` — multi-round tool loop (`_run_agent_loop`, max 6 rounds).
-  Ollama `tools` calling; handles native `tool_calls` AND models like
-  `qwen2.5-coder:14b` that print tool-call JSON inside `content` (regex
-  fallback strips the JSON and keeps the prose).
-- `POST /api/exec` — run a gated action by key (see `EXEC_ACTIONS`).
-- `POST /api/agent/tools` — list actions / shell probes / gate state.
-- `POST /api/escalate` — delegate a task to the OpenClaw gateway agent.
+- Server: `openclaw_ide/server.py` (`ThreadingHTTPServer` on 127.0.0.1:8765),
+  `watchdog_ide.ps1` polls `/api/status` and relaunches if dark.
+- `/api/chat` runs a multi-round agent tool loop against local Ollama
+  (`_run_agent_loop`, wall-clock cap 500s, frontend watchdog 660s). Concurrent
+  agent loops are serialized by `agent_semaphore`; a busy second request is told
+  to wait. `POST /api/chat/cancel` stops an in-flight loop.
+- Gated executable actions are allowlisted (`EXEC_ACTIONS`), resolved against
+  the **active project's** `project.json` (`renderScripts` etc.). Deliverable
+  actions return `"terminal": true` so the loop short-circuits after success.
+- Read-only shell probes only; no arbitrary command execution.
+- Escalation (`/api/escalate`) delegates to the OpenClaw gateway agent
+  (port 18789).
 
-Actions (`EXEC_ACTIONS`) with gates: `ping_qwen`, `qwen_chat` (ungated);
-`assemble_final` / `assemble_with_audio` / `assemble_kinetic_preview`
-(`gate_cpu`); `render_mp4` / `render_all_scenes` (`gate_blender`);
-`render_4k` / `run_1080_then_4k` (`gate_4k_hold`). Gated refusal returns
-`BLOCKED_BY_GATE` with the reason. Deliverable actions are `terminal` — a
-successful run returns immediately without a follow-up LLM round.
+## Guardrails retained in the IDE defaults
 
-Read-only shell probes (`ALLOWED_SHELL_PATTERNS`): blender process, port
-18789, renders list, masters pngs, disk, network status. Anything else is
-refused — the model never runs arbitrary commands.
-
-Escalation (`escalation_openclaw`): invokes the OpenClaw CLI shim
-`C:\Users\HP\AppData\Roaming\npm\openclaw.cmd agent --json --agent main`
-(full path + `shell=True` — bare `openclaw` fails with WinError 2 on .cmd
-shims). Parses `result.payloads[].text` from the JSON envelope; the local
-Qwen agent treats a successful escalation as terminal (its reply is the
-answer).
-
-Agent loop observations:
-
-- `qwen2.5-coder:14b` does NOT emit native `message.tool_calls`; it prints
-  JSON tool blocks in content. The content parser is the primary path.
-- First escalation round takes ~45s (gateway warm) + model think time; a
-  full escalate-through-agent chat is ~2-3 min. Frontend watchdog is 660s
-  (`app.js`); the loop has a 500s wall-clock hard cap so it never outlives
-  the frontend.
-- The agent loop (`_run_agent_loop`) converges via heuristics: max 15 rounds,
-  stuck-loop detection (identical tool+args repeated 3x), a BLOCKED_BY_GATE
-  streak stops the loop (never starts a 2nd GPU job), and it stops once ALL
-  tools have been called AND the model produced prose. Rounds that resolve
-  (`escalate_openclaw` / terminal actions) short-circuit immediately.
-- When a gated action is blocked while Blender renders, the loop returns a
-  "wait for the job to finish" message instead of churning — re-run once the
-  render completes.
-- The OpenClaw agent's own reply style may be `update_goal`-style JSON — it
-  is still the gateway's answer, returned verbatim.
-- Production task detection: prompts containing words like "generate", "create",
-  "build", "develop", "produce", "animate" are routed through the agent loop
-  with tools, NOT the creative fast-path. This prevents chatbot-like behavior.
-
-## Complex Task Execution
-
-### Agent Loop (Build Mode)
-- Max 15 rounds, 500s wall-clock limit
-- Best for: single-step tasks, status queries, simple tool calls
-- Uses progress detection and provides recommendations when stuck
-
-### /api/mission Endpoint
-- Server-side sequential execution (no frontend timeout)
-- Max 10 steps, each step uses one tool
-- Best for: multi-step production tasks, ordered execution
-- Halts on BLOCKED_BY_GATE or failed step
-
-### Escalation to OpenClaw
-- Delegates to gateway agent (port 18789)
-- Best for: cross-app work, Blender MCP, DaVinci Resolve, Canva
-- Terminal: result is the final answer
-
-### Tips for Complex Tasks
-1. Break large tasks into smaller prompts with clear deliverables
-2. Use Build mode for agentic execution (tools + action)
-3. Use Plan mode for brainstorming and planning (fast text)
-4. Use Mission mode for sequential multi-step tasks (no timeout)
-5. Escalate for cross-app or MCP work
-6. Monitor progress via Agent Execution Trace panel
-
-## Live production facts (as of this handoff)
-
-- Live renders root: `C:\Users\HP\OneDrive\The Vault\Africa Season 1\renders`.
-- Scenes 01 and 02 are complete (`01_ColdOpen.mp4`, `02_Context2007.mp4`).
-- Scene 03 (`03_Beat1_Hubs`) is the active render; Blender runs the Cycles job.
-- Watcher daemon: `wait_hq_assemble.ps1` hearts every ~2 min, assembles when
-  10/10 scenes are complete.
-- Gate rules: Blender 5.1.2 only, 4K HOLD (render 1080 first), one GPU job at a
-  time, Yellow Ball identity #FFD54F (eliminated from the frame), protect
-  already-completed clips and stats holds.
-- Do NOT start a second GPU job while Blender is actively rendering.
-
-## Connected tools
-
-OpenClaw CLI, Local Qwen 2.5, Blender 5.1 MCP, DaVinci Resolve MCP (bridge,
-port 49632), Composio (Canva `airway-sasin`).
-
-## Conventions
-
-- Only Blender 5.1.2 for Cycles renders.
-- 1080P renders first; keep 4K HOLD in effect until full 1080 delivery is done.
-- Never copy the live `renders` tree into this workspace — read progress from
-  `AFRICA_RENDER_ROOT` instead.
+The copyright guardrail (YouTube policy + clearance) and production quality
+standards lists remain built into `server.py` as default policy. Project- and
+episode-specific creative rules (yellow-ball identity, render gates, etc.) are
+NOT hardcoded here — they live in each project's own config/docs.

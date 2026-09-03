@@ -29,7 +29,13 @@ STATUS_*.txt
 
 # Session database - contains real usage history
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 .session_index.db
+
+# Per-project isolated runtime state (sessions, traces, memory, search)
+openclaw_ide/project_state/
 
 # Generated runtime state
 .plan_state.json
