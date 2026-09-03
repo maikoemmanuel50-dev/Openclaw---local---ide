@@ -2671,23 +2671,98 @@ async function switchProject(projectPath) {
   }
 }
 
-async function createNewProject() {
-  const name = prompt("New project name:");
-  if (!name) return;
+// ── New Project (choose the folder on your computer) ──────────────────
+let newProjBrowseState = null;
+
+function createNewProject() { openNewProjectDialog(); }
+
+function openNewProjectDialog() {
+  if (document.getElementById("newProjectDialog")) return;
+  const overlay = document.createElement("div");
+  overlay.id = "newProjectDialog";
+  overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:10000;display:flex;align-items:center;justify-content:center;font-family:Inter,sans-serif;";
+  overlay.innerHTML = `
+    <div style="width:660px;max-width:94vw;max-height:84vh;background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);">
+      <div style="padding:12px 16px;border-bottom:1px solid #334155;display:flex;justify-content:space-between;align-items:center;">
+        <strong>📁 Create a New Project</strong>
+        <button id="npClose" style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:10px 16px;border-bottom:1px solid #1e293b;display:flex;gap:8px;align-items:center;">
+        <span style="color:#64748b;white-space:nowrap;">Folder:</span>
+        <input id="npPath" readonly style="flex:1;background:#0b1220;border:1px solid #334155;color:#e2e8f0;padding:6px 8px;border-radius:6px;font-size:12px;" />
+        <button id="npUp" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:6px 10px;border-radius:6px;cursor:pointer;" title="Up one folder">⬆ Up</button>
+        <button id="npDrives" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:6px 10px;border-radius:6px;cursor:pointer;" title="Show drives">💽 Drives</button>
+      </div>
+      <div id="npList" style="flex:1;overflow-y:auto;padding:8px;min-height:240px;font-size:13px;"></div>
+      <div style="padding:10px 16px;border-top:1px solid #334155;display:flex;gap:8px;align-items:center;">
+        <input id="npName" placeholder="Project name (e.g. Africa Season 2)" style="flex:1;background:#0b1220;border:1px solid #334155;color:#e2e8f0;padding:8px;border-radius:6px;" />
+        <button id="npCreate" style="background:#f59e0b;border:none;color:#0f172a;font-weight:600;padding:8px 18px;border-radius:6px;cursor:pointer;">Create here</button>
+        <button id="npCancel" style="background:#1e293b;border:1px solid #334155;color:#e2e8f0;padding:8px 14px;border-radius:6px;cursor:pointer;">Cancel</button>
+      </div>
+      <div id="npMsg" style="padding:0 16px 10px;color:#f87171;font-size:12px;min-height:18px;"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector("#npClose").onclick = () => overlay.remove();
+  overlay.querySelector("#npCancel").onclick = () => overlay.remove();
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  overlay.querySelector("#npUp").onclick = () => { if (newProjBrowseState && newProjBrowseState.parent) loadFsBrowse(newProjBrowseState.parent); };
+  overlay.querySelector("#npDrives").onclick = () => loadFsBrowse("");
+  overlay.querySelector("#npCreate").onclick = createProjectHere;
+  document.getElementById("npName").addEventListener("keydown", (e) => { if (e.key === "Enter") createProjectHere(); });
+  // Start at the system drive root so you can browse anywhere on the computer.
+  loadFsBrowse("/");
+}
+
+async function loadFsBrowse(path) {
+  const list = document.getElementById("npList");
+  const msg = document.getElementById("npMsg");
+  if (msg) msg.textContent = "";
+  if (list) list.innerHTML = '<div style="padding:10px;color:#64748b;">Loading…</div>';
+  try {
+    const res = await fetch("/api/fs/browse?path=" + encodeURIComponent(path));
+    const data = await res.json();
+    if (!data.ok) { if (msg) msg.textContent = data.error || "Could not browse that folder."; return; }
+    newProjBrowseState = data;
+    const pathEl = document.getElementById("npPath");
+    if (pathEl) pathEl.value = data.root ? "My Computer (choose a drive)" : data.path;
+    if (!list) return;
+    list.innerHTML = "";
+    if (data.entries && data.entries.length) {
+      data.entries.forEach(en => {
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;cursor:pointer;";
+        row.addEventListener("mouseenter", () => { row.style.background = "#1e293b"; });
+        row.addEventListener("mouseleave", () => { row.style.background = "transparent"; });
+        row.innerHTML = `<span>${en.isDrive ? "💽" : "📂"}</span><span>${escapeHtml(en.name)}</span>`;
+        row.addEventListener("click", () => loadFsBrowse(en.path));
+        list.appendChild(row);
+      });
+    } else {
+      list.innerHTML = '<div style="padding:10px;color:#64748b;">(empty folder — you can create the project here)</div>';
+    }
+  } catch (e) { if (msg) msg.textContent = "Browse error: " + e.message; }
+}
+
+async function createProjectHere() {
+  const nameEl = document.getElementById("npName");
+  const msg = document.getElementById("npMsg");
+  const name = (nameEl ? nameEl.value : "").trim();
+  if (!name) { if (msg) msg.textContent = "Enter a project name first."; return; }
+  const parent = (newProjBrowseState && newProjBrowseState.path) || "";
   try {
     const res = await fetch("/api/projects/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name })
+      body: JSON.stringify({ name, parent })
     });
     const data = await res.json();
     if (data.ok) {
+      const dlg = document.getElementById("newProjectDialog");
+      if (dlg) dlg.remove();
       showToast("Created project: " + name);
-      loadProjectList();
+      switchProject(data.path); // full reload lands inside the new project
     } else {
-      showToast("Create failed: " + (data.error || ""), "error");
+      if (msg) msg.textContent = data.error || "Create failed.";
     }
-  } catch (e) {
-    showToast("Create failed: " + e.message, "error");
-  }
+  } catch (e) { if (msg) msg.textContent = "Create error: " + e.message; }
 }

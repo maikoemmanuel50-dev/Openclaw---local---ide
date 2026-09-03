@@ -2989,15 +2989,17 @@ def switch_project(project_path):
     return {"ok": True, "name": p.name, "path": str(p)}
 
 
-def create_project(name):
-    """Scaffold a new project folder with minimal structure."""
-    ws = WORKSPACE_ROOT.parent
+def create_project(name, parent=None):
+    """Scaffold a new project folder at <parent>/<name> and register it."""
     safe_name = re.sub(r'[^\w\s\-]', '', name).strip().replace(' ', '_')
     if not safe_name:
         return {"ok": False, "error": "Invalid project name"}
-    project_dir = ws / safe_name
+    base = Path(parent).resolve() if parent else WORKSPACE_ROOT.parent
+    if not base.exists() or not base.is_dir():
+        return {"ok": False, "error": f"Folder not found: {base}"}
+    project_dir = base / safe_name
     if project_dir.exists():
-        return {"ok": False, "error": f"Project '{safe_name}' already exists"}
+        return {"ok": False, "error": f"Project '{safe_name}' already exists at {project_dir}"}
     try:
         project_dir.mkdir(parents=True)
         (project_dir / "src").mkdir()
@@ -3014,7 +3016,61 @@ def create_project(name):
         }
         with open(str(project_dir / "project.json"), "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
+        _register_project(name, project_dir)
         return {"ok": True, "name": name, "path": str(project_dir)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _register_project(name, project_path):
+    """Add (or update) a project entry in projects.json so it appears in the list."""
+    try:
+        entries = []
+        if PROJECTS_REGISTRY.exists():
+            registry = json.loads(PROJECTS_REGISTRY.read_text(encoding="utf-8"))
+            entries = registry.get("projects", [])
+        resolved = str(Path(project_path).resolve())
+        entries = [e for e in entries
+                   if str(Path(e.get("path", "")).resolve()).lower() != resolved.lower()]
+        entries.append({"name": name, "path": resolved})
+        PROJECTS_REGISTRY.write_text(
+            json.dumps({"projects": entries}, indent=2), encoding="utf-8")
+        return True
+    except Exception:
+        return False
+
+
+def browse_filesystem(path=""):
+    """Directory browser for the 'New Project' picker.
+
+    With no path, returns the available drives. Otherwise returns the sorted
+    sub-directories of `path` plus the parent path for 'up' navigation.
+    """
+    try:
+        if not path:
+            drives = []
+            for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+                d = f"{letter}:\\"
+                if os.path.exists(d):
+                    drives.append({"name": letter + ":", "path": d, "isDrive": True})
+            return {"ok": True, "root": True, "path": "", "parent": None, "entries": drives}
+        p = Path(path).resolve()
+        if not p.is_dir():
+            return {"ok": False, "error": f"Not a folder: {path}"}
+        entries = []
+        try:
+            with os.scandir(str(p)) as it:
+                for child in it:
+                    try:
+                        if child.is_dir():
+                            entries.append({"name": child.name, "path": child.path, "isDrive": False})
+                    except Exception:
+                        continue
+        except PermissionError:
+            return {"ok": False, "error": f"Access denied: {path}"}
+        entries.sort(key=lambda e: e["name"].lower())
+        parent = str(p.parent) if p.parent != p else None
+        return {"ok": True, "root": False, "path": str(p), "parent": parent, "entries": entries}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -3108,6 +3164,8 @@ class IDEHandler(SimpleHTTPRequestHandler):
             self.handle_agent_stream(query.get("session", [None])[0])
         elif path == "/api/git/status":
             self._send_json(handle_git_status())
+        elif path == "/api/fs/browse":
+            self._send_json(browse_filesystem(query.get("path", [""])[0]))
         elif path == "/api/projects/list":
             self._send_json({"projects": list_projects()})
         else:
@@ -3181,7 +3239,7 @@ class IDEHandler(SimpleHTTPRequestHandler):
         elif path == "/api/projects/switch":
             self._send_json(switch_project(payload.get("path", "")))
         elif path == "/api/projects/create":
-            self._send_json(create_project(payload.get("name", "")))
+            self._send_json(create_project(payload.get("name", ""), payload.get("parent")))
         else:
             self.send_error(404, "Unknown API endpoint")
 
